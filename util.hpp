@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <iterator>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -19,22 +20,16 @@ void runShell(void) {
 
     
 std::string fileContentsToString(std::string filePath) {
-  std::string retVal = "";
-  std::ifstream file(filePath);
-
-  if(!file.is_open()) {
-    throw std::runtime_error("Unable to open file " + filePath);
-  }
-  std::string line = "";
-  while(std::getline(file, line)) {
-    std::cout << line << retVal << "\n";
-  }
   
+  std::ifstream t(filePath);
+  std::stringstream buffer;
+  buffer << t.rdbuf();
 
+  return buffer.str();
+}
 
-  file.close();
-  return retVal;
-
+bool isDigitOrDot(char c) {
+  return isdigit(c) || c == '.';
 }
 
 #endif

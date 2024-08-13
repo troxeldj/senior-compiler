@@ -12,10 +12,12 @@ enum TokenType {
  
 
   // Other
+  NEWLINE,
   IDENTIFIER,
   FLOAT,
   INT,
-
+  _EOF,
+  KEYWORD,
 };
 
 

@@ -1,6 +1,6 @@
 #include <iostream>
 #include "util.hpp"
-
+#include "Lexer.hpp"
 int main(int argc, char* argv[]) {
   int numOfArgs = argc;
   
@@ -12,7 +12,8 @@ int main(int argc, char* argv[]) {
     std::string fileContents = "";
     try {
       fileContents = fileContentsToString(filePath); 
-      std::cout << fileContents << "\n";
+      Lexer lexer = Lexer(fileContents);
+      lexer.makeTokens();
     } catch (std::exception& ex){
       std::cout << "Unable to open file " + filePath + "\n";
       std::cout << ex.what();
