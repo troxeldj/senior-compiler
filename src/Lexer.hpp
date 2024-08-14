@@ -27,11 +27,7 @@ public:
     if(isAtEnd()) {
       return '\0';
     }
-    if(this->cur_index + 1 < this->contLength) {
-      return this->fileContents.at(this->cur_index);
-    }
-    // Not another character left
-    return '\0'; 
+    return this->fileContents.at(this->cur_index);
   }
 
   char consume(void) {
@@ -45,7 +41,7 @@ public:
     return this->tokens;
   }
   
-  void makeTokens(void) {
+  void makeTokens() {
     char curChar = consume();
     if(curChar == '\0') {
       throw std::runtime_error("Empty buffer");
@@ -63,7 +59,7 @@ public:
     std::string numberString = "";
     bool hasDot = false;
     numberString.push_back(currChar);
-    while(!isAtEnd && isDigitOrDot(peek())) {
+    while(!isAtEnd() && isDigitOrDot(peek())) {
       currChar = consume();
       // check for decimal
       if(currChar == '.') {
@@ -96,10 +92,34 @@ public:
   }
 
   std::optional<Token> makeToken(char currChar) {
-    if(currChar == '\n' || currChar == '\t') {
+    // Whitespace
+    if(currChar == '\n' || currChar == '\t' || currChar == ' ') {
         return std::nullopt;
+    // Numbers
     } else if (isdigit(currChar)) {
       return makeNumber(currChar);
+    // Math operators
+    } else if (currChar == '+') {
+      return Token(TokenType::PLUS, "+");
+    } else if (currChar == '-') {
+      return Token(TokenType::MINUS, "-");
+    } else if (currChar == '*') {
+      return Token(TokenType::MULTIPLY, "*");
+    } else if (currChar == '/') {
+      return Token(TokenType::DIVIDE, "/");
+    } else if (currChar == '(') {
+      return Token(TokenType::LPAREN, currChar);
+    } else if (currChar == ')') {
+      return Token(TokenType::RPAREN, currChar);
+    } else if (currChar == '[') {
+      return Token(TokenType::LBRACKET, currChar);
+    } else if (currChar == ']') {
+      return Token(TokenType::RBRACKET, currChar);
+    } else if (currChar == '{') {
+      return Token(TokenType::LBRACE, currChar);
+    } else if (currChar == '}') {
+      return Token(TokenType::RBRACE, currChar);
+    // Keywords and Identifiers
     } else if(isalpha(currChar)) {
       std::string word = makeWord(currChar);
       if(isKeyword(word)) {

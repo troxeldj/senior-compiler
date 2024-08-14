@@ -7,10 +7,9 @@
 
 
 class Token {
-private:
+public: 
   TokenType type;
   std::any data;
-public: 
   // Constructor
   Token(TokenType type, std::any data) {
     this->type = type;

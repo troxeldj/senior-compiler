@@ -10,6 +10,11 @@ enum TokenType {
   LBRACE, // {
   RBRACE, // }
  
+  // Operators
+  PLUS,
+  MINUS,
+  MULTIPLY,
+  DIVIDE,
 
   // Other
   NEWLINE,
