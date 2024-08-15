@@ -51,6 +51,7 @@ public:
       if(token != std::nullopt) {
         tokens.push_back(token);
       }
+      curChar = consume();
     }
     tokens.push_back(Token(TokenType::_EOF, ""));
   }

@@ -5,15 +5,27 @@
 #include <any>
 #include <variant>
 
-
-class Token {
-public: 
+class Token
+{
+public:
   TokenType type;
   std::any data;
   // Constructor
-  Token(TokenType type, std::any data) {
+  Token() = default;
+  Token(TokenType type, std::any data)
+  {
     this->type = type;
     this->data = data;
+  }
+
+  bool isNumberToken()
+  {
+    return this->type == TokenType::INT || this->type == TokenType::FLOAT;
+  }
+
+  bool isOperatorToken()
+  {
+    return this->type == TokenType::PLUS || this->type == TokenType::MINUS || this->type == TokenType::DIVIDE || this->type == TokenType::MULTIPLY;
   }
 };
 

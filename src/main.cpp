@@ -17,7 +17,8 @@ int main(int argc, char* argv[]) {
       lexer.makeTokens();
       std::vector<std::optional<Token>> tokens = lexer.getTokens();
       Parser parser = Parser(tokens);
-      std::optional<Expr> ast = parser.parseProgram();
+      Expr ast = parser.parseProgram();
+      std::cout << "Parsed successfully\n";
     } catch (std::exception& ex){
       std::cout << "Unable to open file " + filePath + "\n";
       std::cout << ex.what();

@@ -5,133 +5,148 @@
 #include "token.hpp"
 #include <stdexcept>
 
-class Expr {
-  std::optional<Token> token;
+#define Expr std::variant<BinaryExpr, UnaryExpr>
+
+
+class ParserException : public std::exception {
   public:
-    Expr(std::optional<Token> token) {
-      this->token = token;
-    }
+  std::string message;
+
+  ParserException(std::string message) {
+    this->message = message;
+  }
+
+  const char *what () const throw() {
+      return message.c_str(); 
+  }
+
 };
 
-class BinaryExpr : public Expr {
-  std::optional<Expr> left;
-  std::optional<Expr> right;
-  public:
-    BinaryExpr(std::optional<Token> token, std::optional<Expr> left, std::optional<Expr> right) : Expr(token) {
-      this->left = left;
-      this->right = right;
-    }
+
+
+
+
+class BinaryExpr {
+public:
+  std::optional<Token> left;
+  std::optional<Token> operate;
+  std::optional<Token> right;
+
+  BinaryExpr(std::optional<Token> &left, std::optional<Token> operate, std::optional<Token> right) {
+    this->left = left;
+    this->operate = operate;
+    this->right = right;
+  } 
 };
 
-class UnaryExpr : public Expr {
-  std::optional<Expr> expr;
-  public:
-    UnaryExpr(std::optional<Token> token, std::optional<Expr> expr) : Expr(token) {
-      this->expr = expr;
-    }
+
+class UnaryExpr {
+public:
+  std::optional<Token> left;
+  std::optional<Token> operate;
+
+  UnaryExpr(std::optional<Token> left, std::optional<Token> operate) {
+    this->left = left;
+    this->operate = operate;
+  }
 };
+
 
 class Parser
 {
 private:
   std::vector<std::optional<Token>> tokens;
-  int cur_index;
+  int curIndex;
   int tokLen;
-
-  bool isAtEnd(void)
-  {
-    return this->cur_index >= this->tokLen;
-  }
-
-  std::optional<Token> peek(void)
-  {
-    if (isAtEnd())
-    {
-      return std::nullopt;
-    }
-    return this->tokens.at(this->cur_index);
-  }
-
-  std::optional<Token> consume(void)
-  {
-    if (isAtEnd())
-    {
-      return std::nullopt;
-    }
-    return this->tokens.at(this->cur_index++);
-  }
 
 public:
   Parser(std::vector<std::optional<Token>> tokens)
   {
     this->tokens = tokens;
-    this->cur_index = 0;
-    this->tokLen = tokens.size();
+    curIndex = 0;
+    tokLen = tokens.size();
   }
 
-  std::optional<Expr> parse(void)
-  {
-    return expression();
+
+  bool hasNextToken() {
+    return (this->curIndex + 1) < this->tokLen;
   }
 
-  std::optional<Expr> expression(void)
+
+  bool isAtEnd()
   {
-    if (peek() == std::nullopt)
+    return this->curIndex >= tokLen;
+  }
+
+  std::optional<Token> consume()
+  {
+    if (isAtEnd())
     {
       return std::nullopt;
     }
-    std::optional<Expr> left = term();
-    while (peek() != std::nullopt && (peek()->type == TokenType::PLUS || peek()->type == TokenType::MINUS))
-    {
-      std::optional<Token> op = consume();
-      std::optional<Expr> right = term();
-      left = std::make_optional<Expr>(BinaryExpr(op, left, right));
-    }
-    return left;
+    return this->tokens[this->curIndex++];
   }
 
-  std::optional<Expr> term(void)
+  std::optional<Token> peek(int num = 1)
   {
-    if (peek() == std::nullopt)
+    if (this->curIndex + num >= this->tokLen)
     {
       return std::nullopt;
     }
-    std::optional<Expr> left = factor();
-    while (peek() != std::nullopt && (peek()->type == TokenType::MULTIPLY || peek()->type == TokenType::DIVIDE))
-    {
-      std::optional<Token> op = consume();
-      std::optional<Expr> right = factor();
-      left = std::make_optional<Expr>(BinaryExpr(op, left, right));
-    }
-    return left;
+    return this->tokens[this->curIndex + num];
   }
 
-  std::optional<Expr> factor(void)
+  std::optional<Token> currentToken() {
+    return this->tokens[this->curIndex];
+  }
+
+
+  Expr parseProgram()
   {
-    if (peek() == std::nullopt)
-    {
-      return std::nullopt;
-    }
-    std::optional<Token> tok = consume();
-    if (tok->type == TokenType::INT || tok->type == TokenType::FLOAT)
-    {
-      return std::make_optional<Expr>(UnaryExpr(tok, std::nullopt));
-    }
-    else if (tok->type == TokenType::LPAREN)
-    {
-      std::optional<Expr> expr = expression();
-      if (consume()->type != TokenType::RPAREN)
-      {
-        throw std::runtime_error("Expected closing parenthesis");
+    while(!isAtEnd()) {
+      if(currentToken()->isNumberToken()) {
+        if (hasNextToken() && peek()->isOperatorToken()) {
+          return parseBinaryExpr();
+        } else {
+          throw ParserException("Expected Operator");
+        }
+      } else if(currentToken()->isOperatorToken()) {
+        return parseUnaryExpr();
+      } else if(currentToken()->type == TokenType::_EOF) {
+        throw ParserException("Expected Expression");
       }
-      return expr;
-    }
-    else
-    {
-      throw std::runtime_error("Unexpected token");
     }
   }
+  
 
+  BinaryExpr parseBinaryExpr() {
+    std::optional<Token> left = consume();
+    if(!hasNextToken() || !left->isNumberToken()) {
+      throw ParserException("Expected number");
+    }
+    std::optional<Token> operate = consume();
+    std::optional<Token> right = consume();
+    if(!right->isNumberToken()) {
+      throw ParserException("Expected number");
+    }
 
+    return BinaryExpr(left, operate, right);
+  }
+
+  UnaryExpr parseUnaryExpr() {
+    std::optional<Token> left = consume();
+    if(!hasNextToken() || !left->isOperatorToken()) {
+      throw ParserException("Expected operator");
+    }
+    std::optional<Token> operate = consume();
+    if(!hasNextToken() || !operate->isNumberToken()) {
+      throw ParserException("Expected number");
+    }
+
+    return UnaryExpr(left, operate);
+  }
 };
+
+
+
 #endif
