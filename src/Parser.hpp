@@ -7,7 +7,6 @@
 
 #define Expr std::variant<BinaryExpr, UnaryExpr>
 
-
 class ParserException : public std::exception {
   public:
   std::string message;
@@ -21,9 +20,6 @@ class ParserException : public std::exception {
   }
 
 };
-
-
-
 
 
 class BinaryExpr {
@@ -104,17 +100,7 @@ public:
   Expr parseProgram()
   {
     while(!isAtEnd()) {
-      if(currentToken()->isNumberToken()) {
-        if (hasNextToken() && peek()->isOperatorToken()) {
-          return parseBinaryExpr();
-        } else {
-          throw ParserException("Expected Operator");
-        }
-      } else if(currentToken()->isOperatorToken()) {
-        return parseUnaryExpr();
-      } else if(currentToken()->type == TokenType::_EOF) {
-        throw ParserException("Expected Expression");
-      }
+
     }
   }
   
