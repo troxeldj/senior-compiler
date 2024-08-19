@@ -27,6 +27,14 @@ public:
   {
     return this->type == TokenType::PLUS || this->type == TokenType::MINUS || this->type == TokenType::DIVIDE || this->type == TokenType::MULTIPLY;
   }
+
+  bool isFactToken() {
+    return this->type == TokenType::PLUS || this->type == TokenType::MINUS;
+  }
+
+  bool isParenToken() {
+    return this->type == TokenType::LPAREN || this->type == TokenType::RPAREN;
+  }
 };
 
 #endif

@@ -5,7 +5,8 @@
 #include "token.hpp"
 #include <stdexcept>
 
-#define Expr std::variant<BinaryExpr, UnaryExpr>
+#define TokExpr std::variant<std::optional<Token>, Expr>
+
 
 class ParserException : public std::exception {
   public:
@@ -21,14 +22,16 @@ class ParserException : public std::exception {
 
 };
 
+class Expr{};
 
-class BinaryExpr {
+
+class BinaryExpr : public Expr {
 public:
-  std::optional<Token> left;
-  std::optional<Token> operate;
-  std::optional<Token> right;
+  TokExpr left;
+  TokExpr operate;
+  TokExpr right;
 
-  BinaryExpr(std::optional<Token> &left, std::optional<Token> operate, std::optional<Token> right) {
+  BinaryExpr(TokExpr left, TokExpr operate, TokExpr right) : Expr() {
     this->left = left;
     this->operate = operate;
     this->right = right;
@@ -36,12 +39,12 @@ public:
 };
 
 
-class UnaryExpr {
+class UnaryExpr : public Expr {
 public:
-  std::optional<Token> left;
-  std::optional<Token> operate;
+  TokExpr left;
+  TokExpr operate;
 
-  UnaryExpr(std::optional<Token> left, std::optional<Token> operate) {
+  UnaryExpr(TokExpr left, TokExpr operate) : Expr() {
     this->left = left;
     this->operate = operate;
   }
@@ -92,34 +95,46 @@ public:
     return this->tokens[this->curIndex + num];
   }
 
+  bool isBinaryOp() {
+    return currentToken() && currentToken()->isNumberToken() && peek(1) && peek(1)->isOperatorToken() && peek(2) && peek(2)->isNumberToken();
+  }
+
+  bool isUnaryOp() {
+    return currentToken() && currentToken()->isOperatorToken() && peek(1) && peek(1)->isNumberToken();
+  }
+
   std::optional<Token> currentToken() {
     return this->tokens[this->curIndex];
   }
 
-
-  Expr parseProgram()
+  TokExpr parseProgram() 
   {
-    while(!isAtEnd()) {
+    // check for valid expression
+    TokExpr expr;
 
-    }
+    expr = parseExpr();
+    return expr;
   }
-  
 
-  BinaryExpr parseBinaryExpr() {
-    std::optional<Token> left = consume();
-    if(!hasNextToken() || !left->isNumberToken()) {
-      throw ParserException("Expected number");
-    }
-    std::optional<Token> operate = consume();
-    std::optional<Token> right = consume();
-    if(!right->isNumberToken()) {
-      throw ParserException("Expected number");
+  TokExpr parseBinaryExpr() {
+    TokExpr left = parseFact();
+    TokExpr operate;
+    TokExpr right; 
+    bool needsOp = false;
+
+    if(hasNextToken() && (currentToken()->type == TokenType::PLUS || currentToken()->type == TokenType::MINUS)){
+      needsOp = true;
+      operate = consume();
+      right = parseFact();
     }
 
+    if(!needsOp) {
+      return left; 
+    }
     return BinaryExpr(left, operate, right);
   }
 
-  UnaryExpr parseUnaryExpr() {
+  TokExpr parseUnaryExpr() {
     std::optional<Token> left = consume();
     if(!hasNextToken() || !left->isOperatorToken()) {
       throw ParserException("Expected operator");
@@ -131,6 +146,59 @@ public:
 
     return UnaryExpr(left, operate);
   }
+
+  TokExpr parseExpr() {
+    if(isBinaryOp()) {
+      return parseBinaryExpr();
+    } else if(isUnaryOp()) {
+      return parseUnaryExpr();
+    } else {
+      throw ParserException("Expected Expression.");
+    }
+  }
+
+  bool checkToken(std::optional<Token> tok, TokenType tType) {
+    return tok != std::nullopt && tok->type == tType;
+  }
+
+  std::variant<std::optional<Token>, Expr> parseFact() {
+    TokExpr left = parseParen();
+    TokExpr operate = std::nullopt;
+    TokExpr right = std::nullopt;
+    bool needsOp = false;
+
+    if(hasNextToken() && (currentToken()->type == TokenType::DIVIDE || currentToken()->type == TokenType::MULTIPLY)){
+      needsOp = true;
+      operate = consume();
+      right = parseParen();
+    }
+    if(!needsOp) {
+      return left;
+    }
+    return BinaryExpr(left, operate, right);
+  }
+
+  TokExpr parseParen() {
+    bool isExpr = false;
+    TokExpr retVal; 
+    if(currentToken()->isParenToken()) {
+      isExpr = true;
+      consume();
+      retVal = parseExpr();
+      if(currentToken()->type != TokenType::RPAREN) {
+        throw ParserException("Expected closing paren.");
+      }
+    } else {
+      retVal = parseTerm();
+    }
+    return retVal; 
+  }
+
+  std::optional<Token> parseTerm() {
+    return consume();
+  }
+
+  
 };
 
 
