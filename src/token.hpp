@@ -28,8 +28,12 @@ public:
     return this->type == TokenType::PLUS || this->type == TokenType::MINUS || this->type == TokenType::DIVIDE || this->type == TokenType::MULTIPLY;
   }
 
-  bool isFactToken() {
+  bool isPlusMinus() {
     return this->type == TokenType::PLUS || this->type == TokenType::MINUS;
+  }
+
+  bool isMulDiv() {
+    return this->type == TokenType::DIVIDE || this->type == TokenType::MULTIPLY;
   }
 
   bool isParenToken() {

@@ -38,6 +38,7 @@ letter -> a-z | A-Z
 Program -> (Expr)*
 Expr -> BinExpr | UnaryExpr
 BinExpr -> Fact (+ | -) Fact | Fact
+UnaryExpr -> (+ | -) Fact 
 Fact -> Paren (* | /) Paren | Paren
 Paren -> "(" Expr ")" | Term
 Term -> 1,2,3...
@@ -54,3 +55,9 @@ Term -> 1,2,3...
         BinaryOp  +   10
         /  |   \
       12   *    2
+
+                          BinaryOp 
+                          /    |   \
+                     BinaryOp  +   UnaryOp
+                      /   |   \       |
+                    12    *    2      10
