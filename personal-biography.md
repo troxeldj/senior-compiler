@@ -1,4 +1,4 @@
-# Dillon Troxell - Personal Biography
+# Dillon Troxell - Professional Biography
 ## Contact Information
 Email: troxeldj@mail.uc.edu / dillon.troxell@8451.com / dillontroxell4419@gmail.com
 Cell Number: (513) 658-3168
