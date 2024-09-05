@@ -1,8 +1,13 @@
 program -> (expression)*
+
 expression -> binaryExpr | unaryExpr
+
 binaryExpr -> (term | primary) (+ | -) (term | primary)
+
 unaryExpr -> (+ or -) primary          (like in python, a negative number is i.e -21)
+
 term -> primary (* | /) primary
+
 primary -> (integer_literal | expression) (+ | -) (integer_literal | expression)
  
 LL1 - How many lookahead
@@ -18,8 +23,11 @@ Recursive Descent Grammars
 
 
 Expression -> "let" identifier = Expression
+
               | Term "+" Term
+              
               | Term "-" Term
+              
               | Term "*" Term
               | Term "/" Term
               | Term
