@@ -46,12 +46,17 @@ public:
     if(curChar == '\0') {
       throw std::runtime_error("Empty buffer");
     }
-    while(!isAtEnd()) {
+    while(cur_index <= contLength) {
       std::optional<Token> token = makeToken(curChar);
       if(token != std::nullopt) {
         tokens.push_back(token);
       }
-      curChar = consume();
+      if(cur_index == contLength) {
+        curChar = peek();
+        cur_index++;
+      } else {
+        curChar = consume();
+      }
     }
     tokens.push_back(Token(TokenType::_EOF, ""));
   }
@@ -61,7 +66,11 @@ public:
     bool hasDot = false;
     numberString.push_back(currChar);
     while(!isAtEnd() && isDigitOrDot(peek())) {
-      currChar = consume();
+      if(cur_index == contLength) {
+        currChar = peek();
+      } else {
+        currChar = consume();
+      }
       // check for decimal
       if(currChar == '.') {
         hasDot = true;

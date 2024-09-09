@@ -2,103 +2,10 @@
 #define PARSER_HPP
 #include <vector>
 #include <optional>
-#include "token.hpp"
 #include <stdexcept>
-
-#define ParserTypes std::variant<UnaryExpr, BinaryExpr, Literal>
-
-
-class ParserException : public std::exception {
-  public:
-  std::string message;
-
-  ParserException(std::string message) {
-    this->message = message;
-  }
-
-  const char *what () const throw() {
-      return message.c_str(); 
-  }
-};
-
-class Expr{
-  public:
-
-  std::optional<Token> left;
-  std::optional<Token> operate;
-  std::optional<Token> right;
-
-  Expr() = default;
-  Expr(std::optional<Token> left) {
-    this->left = left;
-    this->operate = std::nullopt;
-    this->right = std::nullopt;
-  }
-  Expr(std::optional<Token> left, std::optional<Token> operate) {
-    this->left = left;
-    this->operate = operate;
-    this->right = std::nullopt;
-  }
-
-  Expr(std::optional<Token> left, std::optional<Token> operate, std::optional<Token> right) {
-    this->left = left;
-    this->operate = operate;
-    this->right = right;
-  }
-};
-
-class Literal : public Expr {
-  public:
-
-  Literal(std::optional<Token> tok) : Expr(tok) {
-  }
-};
-
-class Statement{};
-
-
-class BinaryExpr : public Expr {
-public:
-
-  Expr left;
-  std::optional<Token> operate;
-  Expr right;  
-
-  BinaryExpr(std::optional<Token> left, std::optional<Token> operate, std::optional<Token> right) : Expr (left, operate, right) {
-  }
-
-
-  BinaryExpr(Expr left, std::optional<Token> operate, Expr right) {
-    this->left = left;
-    this->operate = operate;
-    this->right = right;
-  }
-};
-
-
-class UnaryExpr : public Expr {
-public:
-  Expr left;
-  std::optional<Token> operate;
-
-  UnaryExpr(std::optional<Token> left, std::optional<Token> operate) : Expr(left, operate)  {
-
-  }
-
-  UnaryExpr(Expr left, std::optional<Token> operate) {
-    this->left = left;
-    this->operate = operate;
-  }
-};
-
-class NumLit : public Expr {
-public:
-  std::optional<Token> tok;
-  NumLit(std::optional<Token> tok) : Expr() {
-    this->tok = tok;
-  }
-};
-
+#include <memory>
+#include "token.hpp"
+#include "ParserTypes.hpp"
 
 class Parser
 {
@@ -152,64 +59,77 @@ public:
     return currentToken() && currentToken()->isOperatorToken() && peek(1) && peek(1)->isNumberToken();
   }
 
+  bool isTerm() {
+    return (currentToken()->type == TokenType::INT || currentToken()->type == TokenType::FLOAT) && (peek() == std::nullopt || peek()->type == TokenType::_EOF);
+  }
+
   std::optional<Token> currentToken() {
     return this->tokens[this->curIndex];
   }
 
-  Expr parseProgram() {
+  std::unique_ptr<Expr> parseProgram() {
     return parseExpr();
   }
 
-  Expr parseExpr() {
-    if(isBinaryOp())
+  std::unique_ptr<Expr> parseExpr() {
+    if(isBinaryOp()) {
       return parseBinaryExpr();
-    else if (isUnaryOp())
+    } else if (isUnaryOp()) {
       return parseUnaryExpr();
-    else
-      throw ParserException("Expected Expr");
+    } else if (isTerm()) {
+      return parseTerm();
+    } else {
+      throw ParserException("Expected Expression.");
+    }
   }
 
-  UnaryExpr parseUnaryExpr() {
-    std::optional<Token> operate = consume();
-    Expr left = parseFact();
-    return UnaryExpr(left, operate);
-  }
 
-  Expr parseBinaryExpr() {
-      Expr left = parseFact();
-      if(currentToken()->isPlusMinus()) {
-        std::optional<Token> operate = consume();
-        Expr right = parseFact();
-        return BinaryExpr(left, operate, right);
-      }
+  std::unique_ptr<Expr> parseBinaryExpr() {
+    std::unique_ptr<Expr> left = parseFact();
+    if(!currentToken()->isPlusMinus()) {
       return left;
+    }
+    Token operate = consume().value();
+    std::unique_ptr<Expr> right = parseFact();
+    return std::make_unique<BinaryExpr>(BinaryExpr(left, operate, right));
   }
 
-  Expr parseFact() {
-   Expr left = parseParen(); 
-   if(currentToken()->isMulDiv()) {
-    std::optional<Token> operate = consume();
-    Expr right = parseParen();
-    return BinaryExpr(left, operate, right);
-   }
-   return left;
+  std::unique_ptr<Expr> parseUnaryExpr() {
+    if(!currentToken()->isOperatorToken()) {
+      throw ParserException("Expected Operator");
+    }
+    Token operate = consume().value();
+    std::unique_ptr<Expr> left = parseTerm();
+    return std::make_unique<UnaryExpr>(operate, left);
   }
 
-  Expr parseParen() {
-    Expr retExpr;
+  std::unique_ptr<Expr> parseFact() {
+    std::unique_ptr<Expr> left = parseParen();
+    if(!currentToken()->isMulDiv()) {
+      return left;
+    }
+    Token operate = consume().value();
+    std::unique_ptr<Expr> right = parseParen();
+    return std::make_unique<BinaryExpr>(BinaryExpr(left, operate, right));
+  }
+
+  std::unique_ptr<Expr> parseParen() {
+    // parenthesized expr
     if(currentToken()->type == TokenType::LPAREN) {
-      retExpr = parseExpr();
-      return retExpr;
+      // consume l paren 
+      consume();
+      return parseExpr();
     }
-   std::optional<Token> term = parseTerm();
-   return Literal(term);
+    return parseTerm();
   }
 
-  std::optional<Token> parseTerm() {
-    if(currentToken() == std::nullopt || !currentToken()->isNumberToken()) {
-      throw ParserException("Expected Number.");
+  std::unique_ptr<Expr> parseTerm() {
+    if(!currentToken()->isNumberToken()) {
+      throw ParserException("Expected Number");
     }
-    return consume();
+    std::optional<Token> curTok = consume();
+    Literal retLit = Literal(curTok);
+    return std::make_unique<Literal>(retLit);
   }
 };
 

@@ -44,11 +44,17 @@ letter -> a-z | A-Z
 
 ------------ Revision Will/Dillon 8/16
 Program -> (Expr)*
+
 Expr -> BinExpr | UnaryExpr
+
 BinExpr -> Fact (+ | -) Fact | Fact
+
 UnaryExpr -> (+ | -) Fact 
+
 Fact -> Paren (* | /) Paren | Paren
+
 Paren -> "(" Expr ")" | Term
+
 Term -> 1,2,3...
 
 

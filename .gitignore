@@ -4,3 +4,6 @@ main.*/
 main
 src/a.out
 .vscode/
+.vscode/*.json
+src/*.exe
+src/*.gch

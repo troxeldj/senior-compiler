@@ -1,17 +1,18 @@
 #ifndef _TOKEN_INCLUDE
 #define _TOKEN_INCLUDE
 
-#include "tokentype.hpp"
 #include <any>
 #include <variant>
+#include "tokentype.hpp"
 
 class Token
 {
-public:
+
+  public:
   TokenType type;
   std::any data;
   // Constructor
-  Token() = default;
+  Token(){}
   Token(TokenType type, std::any data)
   {
     this->type = type;
