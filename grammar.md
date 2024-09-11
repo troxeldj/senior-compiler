@@ -45,7 +45,8 @@ letter -> a-z | A-Z
 ------------ Revision Will/Dillon 8/16
 Program -> (Expr)*
 
-Expr -> BinExpr | UnaryExpr
+Expr -> BinaryExpr | UnaryExpr
+
 
 BinExpr -> Fact (+ | -) Fact | Fact
 
