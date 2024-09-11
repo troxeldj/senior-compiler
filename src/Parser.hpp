@@ -72,7 +72,13 @@ public:
   }
 
   std::unique_ptr<Expr> parseExpr() {
-    if(isBinaryOp()) {
+    if(currentToken()->type == TokenType::LPAREN) {
+      // consume l paren token
+      consume();
+      std::unique_ptr<Expr> retExpr = parseExpr();
+      consume();
+      return retExpr;
+    } else if(isBinaryOp()) {
       return parseBinaryExpr();
     } else if (isUnaryOp()) {
       return parseUnaryExpr();
@@ -86,12 +92,12 @@ public:
 
   std::unique_ptr<Expr> parseBinaryExpr() {
     std::unique_ptr<Expr> left = parseFact();
-    if(!currentToken()->isPlusMinus()) {
-      return left;
+    while(currentToken()->isPlusMinus()) {
+      Token operate = consume().value();
+      std::unique_ptr<Expr> right = parseFact();
+      left = std::make_unique<BinaryExpr>(left, operate, right);
     }
-    Token operate = consume().value();
-    std::unique_ptr<Expr> right = parseFact();
-    return std::make_unique<BinaryExpr>(BinaryExpr(left, operate, right));
+    return left;
   }
 
   std::unique_ptr<Expr> parseUnaryExpr() {
@@ -105,20 +111,23 @@ public:
 
   std::unique_ptr<Expr> parseFact() {
     std::unique_ptr<Expr> left = parseParen();
-    if(!currentToken()->isMulDiv()) {
-      return left;
+    while(currentToken()->isMulDiv()) {
+      Token operate = consume().value();
+      std::unique_ptr<Expr> right = parseParen();
+      left = std::make_unique<BinaryExpr>(BinaryExpr(left, operate, right));
     }
-    Token operate = consume().value();
-    std::unique_ptr<Expr> right = parseParen();
-    return std::make_unique<BinaryExpr>(BinaryExpr(left, operate, right));
+    return left;
   }
 
   std::unique_ptr<Expr> parseParen() {
     // parenthesized expr
-    if(currentToken()->type == TokenType::LPAREN) {
+    while(currentToken()->type == TokenType::LPAREN) {
       // consume l paren 
       consume();
-      return parseExpr();
+      std::unique_ptr<Expr> expr = parseExpr();
+      if(currentToken()->type != TokenType::RPAREN) {
+        throw ParserException("Expected right paren token");
+      }
     }
     return parseTerm();
   }
