@@ -5,6 +5,7 @@
 #include "token.hpp"
 #include "tokentype.hpp"
 
+
 class Lexer {
 private:
   std::string fileContents;
@@ -98,7 +99,12 @@ public:
   }
 
   bool isKeyword(std::string word) {
-
+    for (std::string& keyword : KEYWORDS) {
+      if(word == keyword) {
+        return true;
+      }
+    }
+    return false;
   }
 
   std::optional<Token> makeToken(char currChar) {

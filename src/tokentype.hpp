@@ -25,5 +25,7 @@ enum TokenType {
   KEYWORD,
 };
 
+std::vector<std::string> KEYWORDS = {"float", "int", "string", "for", "const", "func"};
+
 
 #endif

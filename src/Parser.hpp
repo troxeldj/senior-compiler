@@ -72,18 +72,17 @@ public:
   }
 
   std::unique_ptr<Expr> parseExpr() {
-    if(currentToken()->type == TokenType::LPAREN) {
-      // consume l paren token
+    // Consume initial parenthesis
+    while(currentToken() && currentToken()->type == LPAREN) {
       consume();
-      std::unique_ptr<Expr> retExpr = parseExpr();
-      consume();
-      return retExpr;
-    } else if(isBinaryOp()) {
+    }
+
+    if(isBinaryOp()) {
       return parseBinaryExpr();
     } else if (isUnaryOp()) {
       return parseUnaryExpr();
     } else if (isTerm()) {
-      return parseTerm();
+    return parseTerm();
     } else {
       throw ParserException("Expected Expression.");
     }
