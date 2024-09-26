@@ -95,16 +95,6 @@ public:
       retVal.push_back(currChar);
     }
     return retVal;
-
-  }
-
-  bool isKeyword(std::string word) {
-    for (std::string& keyword : KEYWORDS) {
-      if(word == keyword) {
-        return true;
-      }
-    }
-    return false;
   }
 
   std::optional<Token> makeToken(char currChar) {
@@ -135,14 +125,25 @@ public:
       return Token(TokenType::LBRACE, currChar);
     } else if (currChar == '}') {
       return Token(TokenType::RBRACE, currChar);
-    // Keywords and Identifiers
-    } else if(isalpha(currChar)) {
+    } else if (currChar == '=') {
+      return Token(TokenType::EQUAL, "");
+    } else if(currChar == '"') {
+      consume(); // consume "
       std::string word = makeWord(currChar);
-      if(isKeyword(word)) {
-        return Token(TokenType::KEYWORD, word);
-      } else {
-        return Token(TokenType::IDENTIFIER, word);
+      if(currChar != '"') {
+        throw std::runtime_error("Expected closing paren");
       }
+      consume(); //consume closing "
+      return Token(TokenType::STRING, word);
+      // Keywords and Identifiers
+      } else if(isalpha(currChar)) {
+        std::string word = makeWord(currChar);
+        if(isKeyword(word)) {
+          return Token(TokenType::KEYWORD, word);
+        }
+        return Token(TokenType::IDENTIFIER, word);
+    } else {
+      throw std::runtime_error("Unexpected Token.");
     }
   }
 

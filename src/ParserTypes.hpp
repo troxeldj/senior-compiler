@@ -7,7 +7,6 @@
 #include <optional>
 #include "token.hpp"
 
-
 class ParserException : public std::exception {
   public:
   std::string message;
@@ -98,6 +97,25 @@ class BinaryExpr : public Expr {
         break;
     }
   }
+};
+
+class VarDecl : public Expr {
+  std::string name;
+  std::string dataType;
+  std::unique_ptr<Expr> expr;
+
+  VarDecl() {}
+
+  public:
+  float getValue() override {
+
+  }
+
+  VarDecl(std::string name, std::unique_ptr<Expr> expr) : 
+    name{name}, expr{std::move(expr)} {}
+
+  VarDecl(std::string name, std::string dataType, std::unique_ptr<Expr> expr) : 
+    name{name}, dataType{dataType}, expr{std::move(expr)} {}
 };
 
 #endif

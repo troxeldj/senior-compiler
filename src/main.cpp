@@ -2,6 +2,7 @@
 #include "util.hpp"
 #include "Lexer.hpp"
 #include "Parser.hpp"
+
 int main(int argc, char* argv[]) {
   int numOfArgs = argc;
   
@@ -21,9 +22,7 @@ int main(int argc, char* argv[]) {
     lexer.makeTokens();
     std::vector<std::optional<Token>> tokens = lexer.getTokens();
     Parser parser = Parser(tokens);
-    std::unique_ptr<Expr> ast = parser.parseProgram();
-    float value = ast->getValue(); 
-    std::cout << value << "\n";
+    std::vector<std::unique_ptr<Expr>> ast = parser.parseProgram();
     std::cout << "Parsed successfully\n";
     return 0;
   }

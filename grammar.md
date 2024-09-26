@@ -43,10 +43,15 @@ number -> digit*
 letter -> a-z | A-Z
 
 ------------ Revision Will/Dillon 8/16
-Program -> (Expr)*
+Program -> (Expr)* | (VarDecl)*
 
-Expr -> BinaryExpr | UnaryExpr
+Expr -> BinaryExpr | UnaryExpr | VarDecl
 
+VarDecl -> Datatype Idenifier "=" Expr
+
+Datatype -> "STRING" | "INT" | "FLOAT"
+
+Identifier -> [a-zA-Z0-9_]*
 
 BinExpr -> Fact (+ | -) Fact | Fact
 

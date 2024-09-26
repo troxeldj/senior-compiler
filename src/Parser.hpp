@@ -30,7 +30,7 @@ public:
 
   bool isAtEnd()
   {
-    return this->curIndex >= tokLen;
+    return this->curIndex >= (tokLen - 1);
   }
 
   std::optional<Token> consume()
@@ -51,41 +51,90 @@ public:
     return this->tokens[this->curIndex + num];
   }
 
+  void consumeParens() {
+    while(currentToken()->type == TokenType::LPAREN)
+      consume();
+  }
+
   bool isBinaryOp() {
-    return currentToken() && currentToken()->isNumberToken() && peek(1) && peek(1)->isOperatorToken() && peek(2) && peek(2)->isNumberToken();
+    consumeParens();
+    return (
+      (currentToken() && currentToken()->isNumberToken()) && 
+      (peek(1) && peek(1)->isOperatorToken()) &&
+      (peek(2) && peek(2)->isNumberToken())
+    );
   }
 
   bool isUnaryOp() {
-    return currentToken() && currentToken()->isOperatorToken() && peek(1) && peek(1)->isNumberToken();
+    consumeParens();
+    return (
+      (currentToken() && currentToken()->isOperatorToken()) &&
+      (peek(1) && peek(1)->isNumberToken())
+    );
+  }
+
+  bool isNewline() {
+    return currentToken()->type == TokenType::NEWLINE;
+  }
+
+  bool isVarDecl() {
+    return (
+      (
+        currentToken() 
+        && currentToken()->type == TokenType::KEYWORD
+        && isDataType(std::any_cast<std::string>(currentToken()->data))
+      ) 
+      && (peek(1) && peek(1)->type == IDENTIFIER)
+      && (peek(2) && peek(2)->type == EQUAL)
+      && peek(3)
+    );
   }
 
   bool isTerm() {
-    return (currentToken()->type == TokenType::INT || currentToken()->type == TokenType::FLOAT) && (peek() == std::nullopt || peek()->type == TokenType::_EOF);
+    if(currentToken()->isNumberToken()) {
+      return true;
+    }
+    return false;
   }
 
   std::optional<Token> currentToken() {
     return this->tokens[this->curIndex];
   }
 
-  std::unique_ptr<Expr> parseProgram() {
-    return parseExpr();
+  std::vector<std::unique_ptr<Expr>> parseProgram() {
+    std::vector<std::unique_ptr<Expr>> retVec;
+    while(!isAtEnd()) {
+      std::unique_ptr<Expr> expr = parseExpr();
+      if(expr == nullptr) {
+        consume();
+        continue;
+      }
+      retVec.emplace_back(std::move(expr));
+    }
+    return retVec;
   }
 
   std::unique_ptr<Expr> parseExpr() {
-    // Consume initial parenthesis
-    while(currentToken() && currentToken()->type == LPAREN) {
-      consume();
-    }
-
+    std::unique_ptr<Expr> retExpr;
     if(isBinaryOp()) {
-      return parseBinaryExpr();
+      retExpr = parseBinaryExpr();
     } else if (isUnaryOp()) {
-      return parseUnaryExpr();
+      retExpr = parseUnaryExpr();
+    } else if (isVarDecl()) {
+      retExpr = parseVarDecl();
+    } else if (isNewline()) {
+      return nullptr;
     } else if (isTerm()) {
-    return parseTerm();
+      retExpr = parseTerm();
     } else {
       throw ParserException("Expected Expression.");
     }
+
+    while (currentToken()->type == TokenType::RPAREN) {
+      consume(); 
+    }
+    
+    return retExpr;
   }
 
 
@@ -106,6 +155,14 @@ public:
     Token operate = consume().value();
     std::unique_ptr<Expr> left = parseTerm();
     return std::make_unique<UnaryExpr>(operate, left);
+  }
+
+  std::unique_ptr<Expr> parseVarDecl() {
+    std::string dataType = std::any_cast<std::string>(consume()->data);
+    std::string identName = std::any_cast<std::string>(consume()->data);
+    // consume =
+    consume();
+    return std::make_unique<VarDecl>(identName, dataType, std::move(parseExpr()));
   }
 
   std::unique_ptr<Expr> parseFact() {
