@@ -91,9 +91,13 @@ public:
   }
 
   bool isTerm() {
-    if(currentToken()->isNumberToken()) {
+    if(currentToken()->isNumberToken()) return true;
+    return false;
+  }
+
+  bool isString() {
+    if(currentToken() && currentToken()->type == TokenType::STRING) 
       return true;
-    }
     return false;
   }
 
@@ -126,6 +130,8 @@ public:
       return nullptr;
     } else if (isTerm()) {
       retExpr = parseTerm();
+    } else if (isString()) {
+      retExpr = std::make_unique<Literal>(consume());
     } else {
       throw ParserException("Expected Expression.");
     }

@@ -88,9 +88,16 @@ public:
   }
 
   std::string makeWord(char currChar) {
+    if(currChar == '"') {
+      currChar = consume();
+    }
     std::string retVal = "";
     retVal.push_back(currChar);
     while(!isAtEnd() && isalnum(peek())) {
+      if(currChar == '"') {
+        consume();
+        continue;
+      }
       currChar = consume();
       retVal.push_back(currChar);
     }
@@ -128,7 +135,6 @@ public:
     } else if (currChar == '=') {
       return Token(TokenType::EQUAL, "");
     } else if(currChar == '"') {
-      consume(); // consume "
       std::string word = makeWord(currChar);
       if(currChar != '"') {
         throw std::runtime_error("Expected closing paren");

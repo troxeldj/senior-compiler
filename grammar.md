@@ -45,11 +45,11 @@ letter -> a-z | A-Z
 ------------ Revision Will/Dillon 8/16
 Program -> (Expr)* | (VarDecl)*
 
-Expr -> BinaryExpr | UnaryExpr | VarDecl
+Expr -> BinaryExpr | UnaryExpr | VarDecl | String
 
 VarDecl -> Datatype Idenifier "=" Expr
 
-Datatype -> "STRING" | "INT" | "FLOAT"
+Datatype -> "string" | "int" | "float"
 
 Identifier -> [a-zA-Z0-9_]*
 
@@ -63,6 +63,7 @@ Paren -> "(" Expr ")" | Term
 
 Term -> 1,2,3...
 
+String -> '"' [a-zA-Z_]*
 
 
 12 * 2 + 10 -> binaryOp
