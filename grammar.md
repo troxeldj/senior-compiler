@@ -45,9 +45,11 @@ letter -> a-z | A-Z
 ------------ Revision Will/Dillon 8/16
 Program -> (Expr)* | (VarDecl)*
 
-Expr -> BinaryExpr | UnaryExpr | VarDecl | String
+Expr -> BinaryExpr | UnaryExpr | VarDecl | Literal
 
 VarDecl -> Datatype Idenifier "=" Expr
+
+Literal -> string | int | float
 
 Datatype -> "string" | "int" | "float"
 
@@ -59,7 +61,7 @@ UnaryExpr -> (+ | -) Fact
 
 Fact -> Paren (* | /) Paren | Paren
 
-Paren -> "(" Expr ")" | Term
+Paren -> "(" Expr ")" | Term | Identifier
 
 Term -> 1,2,3...
 
