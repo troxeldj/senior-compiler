@@ -27,4 +27,7 @@ A typical compiler operates in stages, a compiler can have a multitude of differ
 12. Research Assembly Code Generation implementations and how this process works in current compiler implementations; such as CPython
 13. Develop the code generation component for the project's compiler
 
+## Final QA Tasks
+14. QA the compiler as a whole. Ensure the interaction between components is functioning and the compiler generates correct assembly code.
+
 Note: I (Dillon Troxell) am the only member of my team (Mightnight squad), so all tasks will be assigned to me.
