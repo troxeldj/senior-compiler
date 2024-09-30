@@ -29,6 +29,13 @@ public:
     }
     table.erase(name);
   }
+
+  std::unique_ptr<Expr> get(std::string name) {
+    if(!isInTable(name)) {
+      throw ParserException("Variable " + name + " not found");
+    }
+    return std::move(table[name]);
+  }
 };
 
 

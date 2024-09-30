@@ -59,9 +59,9 @@ public:
   bool isBinaryOp() {
     consumeParens();
     return (
-      (currentToken() && currentToken()->isNumberToken()) && 
+      (currentToken() && (currentToken()->isNumberToken() || currentToken()->type == TokenType::IDENTIFIER)) && 
       (peek(1) && peek(1)->isOperatorToken()) &&
-      (peek(2) && peek(2)->isNumberToken())
+      (peek(2) && (peek(2)->isNumberToken()|| currentToken()->type == TokenType::IDENTIFIER))
     );
   }
 
@@ -195,8 +195,11 @@ public:
   }
 
   std::unique_ptr<Expr> parseTerm() {
-    if(!currentToken()->isNumberToken()) {
+    if(!currentToken()->isNumberToken() || currentToken()->type != TokenType::IDENTIFIER) {
       throw ParserException("Expected Number");
+    }
+    if(currentToken()->type == TokenType::IDENTIFIER) {
+      return std::make_unique<Literal>(currentToken());
     }
     std::optional<Token> curTok = consume();
     Literal retLit = Literal(curTok);

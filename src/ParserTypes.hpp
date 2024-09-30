@@ -67,6 +67,10 @@ class Literal : public Expr {
     std::string stringVal = std::any_cast<std::string>(tok.data);
     return std::stod(stringVal);
   }
+
+  Token getToken() {
+    return this->tok;
+  }
 };
 
 class BinaryExpr : public Expr {

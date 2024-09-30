@@ -1,1 +1,2 @@
-string var = "Test"
+string var = 10
+var + 10
