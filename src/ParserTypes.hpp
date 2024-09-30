@@ -46,15 +46,21 @@ class UnaryExpr : public Expr {
     return left->getValue();
   }
 };
+
 class Literal : public Expr {
   private:
   Token tok;
-
+  std::string type;
   Literal() {}
 
   public:
   Literal(std::optional<Token> tok) {
     this->tok = std::move(tok.value());
+    this->type = this->tok.type;
+  }
+
+  std::string getType() {
+    return this->type;
   }
 
   float getValue() override {
@@ -107,8 +113,15 @@ class VarDecl : public Expr {
   VarDecl() {}
 
   public:
-  float getValue() override {
+  float getValue() override { 
+  }
 
+  std::string getName() {
+    return this->name;
+  }
+
+  std::unique_ptr<Expr> getExpr() {
+    return std::move(this->expr);
   }
 
   VarDecl(std::string name, std::unique_ptr<Expr> expr) : 
