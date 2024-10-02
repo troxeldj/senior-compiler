@@ -1,45 +1,33 @@
-#ifndef _TOKEN_INCLUDE
-#define _TOKEN_INCLUDE
-
 #include <any>
 #include <variant>
-#include "tokentype.hpp"
+#include "Token.hpp"
 
-class Token
-{
-
-  public:
-  TokenType type;
-  std::any data;
-  // Constructor
-  Token(){}
-  Token(TokenType type, std::any data)
-  {
-    this->type = type;
+  Token::Token(TokenType tType, std::any data) {
+    this->type = tType;
     this->data = data;
   }
 
-  bool isNumberToken()
-  {
+  Token::Token(const Token& other) {
+    this->data = other.data;
+    this->type = other.type;
+  }
+
+  bool Token::isNumberToken() {
     return this->type == TokenType::INT || this->type == TokenType::FLOAT;
   }
 
-  bool isOperatorToken()
-  {
+  bool Token::isOperatorToken() {
     return this->type == TokenType::PLUS || this->type == TokenType::MINUS || this->type == TokenType::DIVIDE || this->type == TokenType::MULTIPLY;
   }
 
-  bool isPlusMinus() {
+  bool Token::isPlusMinus() {
     return this->type == TokenType::PLUS || this->type == TokenType::MINUS;
   }
 
-  bool isMulDiv() {
+  bool Token::isMulDiv() {
     return this->type == TokenType::DIVIDE || this->type == TokenType::MULTIPLY;
   }
 
-  bool isParenToken() {
+  bool Token::isParenToken() {
     return this->type == TokenType::LPAREN || this->type == TokenType::RPAREN;
   }
-};
-
-#endif

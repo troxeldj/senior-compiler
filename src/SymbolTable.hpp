@@ -11,24 +11,11 @@ private:
   SymbolTable& operator=(const SymbolTable&) = delete;
   SymbolTable(const SymbolTable&) = delete;
 public:
-  SymbolTable() {
-    table = std::map<std::string, std::unique_ptr<Expr>>();
-  }
+  SymbolTable();
 
-  void add(std::string name, std::unique_ptr<Expr> expr) {
-    table[name] = std::move(expr);
-  }
-
-  bool isInTable(std::string name) {
-    return table.find(name) != table.end();
-  }
-
-  void remove(std::string name) {
-    if(!isInTable(name)) {
-      return;
-    }
-    table.erase(name);
-  }
+  void add(std::string name, std::unique_ptr<Expr> expr);
+  bool isInTable(std::string name);
+  void remove(std::string name);
 };
 
 
