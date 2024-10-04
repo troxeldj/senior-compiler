@@ -4,6 +4,7 @@
 #include <optional>
 #include "Token.hpp"
 #include "Expr.hpp"
+#include "Visitor.hpp"
 
 class UnaryExpr : public Expr {
   private:
@@ -13,7 +14,8 @@ class UnaryExpr : public Expr {
 
   public:
   UnaryExpr(std::optional<Token>, std::unique_ptr<Expr>&);
-  float getValue() override;
+  std::any getValue() override;
+  void accept(Visitor*) override;
 };
 
 #endif

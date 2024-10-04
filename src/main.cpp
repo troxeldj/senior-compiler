@@ -2,7 +2,8 @@
 #include "util.hpp"
 #include "Lexer.hpp"
 #include "Parser.hpp"
-#include "SimpleInterpreter.hpp"
+#include "Interpreter.hpp"
+
 int main(int argc, char* argv[]) {
   int numOfArgs = argc;
   
@@ -23,7 +24,7 @@ int main(int argc, char* argv[]) {
     std::vector<std::optional<Token>> tokens = lexer.getTokens();
     Parser parser = Parser(tokens);
     std::vector<std::unique_ptr<Expr>> ast = parser.parseProgram();
-    SimpleInterpreter interpreter = SimpleInterpreter(std::move(ast));
+    Interpreter interpreter = Interpreter(std::move(ast));
     interpreter.interpretProgram();
     std::cout << "Parsed successfully\n";
     return 0;

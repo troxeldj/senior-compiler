@@ -3,6 +3,8 @@
 #include <string>
 #include <memory>
 #include "Expr.hpp"
+#include "Visitor.hpp"
+
 
 class VarDecl : public Expr {
   std::string name;
@@ -12,7 +14,6 @@ class VarDecl : public Expr {
   VarDecl();
 
 public:
-  float getValue() override;
 
   std::string getName();
 
@@ -21,6 +22,9 @@ public:
   VarDecl(std::string, std::unique_ptr<Expr>);
 
   VarDecl(std::string, std::string, std::unique_ptr<Expr>);
+
+  std::any getValue() override;
+  void accept(Visitor*);
 };
 
 #endif

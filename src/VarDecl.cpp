@@ -2,9 +2,6 @@
 
 VarDecl::VarDecl() {}
 
-float VarDecl::getValue() {
-}
-
 std::string VarDecl::getName() {
   return this->name;
 }
@@ -18,3 +15,11 @@ VarDecl::VarDecl(std::string name, std::unique_ptr<Expr> expr) :
 
 VarDecl::VarDecl(std::string name, std::string dataType, std::unique_ptr<Expr> expr) : 
   name{name}, dataType{dataType}, expr{std::move(expr)} {}
+
+std::any VarDecl::getValue() {
+  return this->expr->getValue();
+}
+
+void VarDecl::accept(Visitor* vis) {
+  vis->visitVarDecl(this);
+}

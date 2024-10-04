@@ -1,9 +1,11 @@
 #ifndef __LITERAL_HPP
 #define __LITERAL_HPP
 
+#include <optional>
 #include "Token.hpp"
 #include "Expr.hpp"
-#include <optional>
+#include "Visitor.hpp"
+
 class Literal : public Expr {
   private:
   Token tok;
@@ -16,6 +18,7 @@ class Literal : public Expr {
 
   std::string getType();
 
-  float getValue() override;
+  std::any getValue() override;
+  void accept(Visitor*) override;
 };
 #endif
