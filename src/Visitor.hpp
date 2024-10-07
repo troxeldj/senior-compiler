@@ -7,6 +7,7 @@ class BinaryExpr;
 class UnaryExpr;
 class Literal;
 class VarDecl;
+class Identifier;
 
 class Visitor {
 public:
@@ -14,6 +15,7 @@ public:
   virtual void visitUnaryExpr(UnaryExpr*) = 0;
   virtual void visitLiteral(Literal*) = 0;
   virtual void visitVarDecl(VarDecl* varDecl) = 0;
+  virtual void visitIdentifier(Identifier* ident) = 0;
 };
 
 #endif

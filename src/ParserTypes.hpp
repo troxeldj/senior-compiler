@@ -5,4 +5,5 @@
 #include "Literal.hpp"
 #include "VarDecl.hpp"
 #include "ParserException.hpp"
+#include "Identifier.hpp"
 #endif
