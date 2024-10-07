@@ -14,11 +14,11 @@ std::string Literal::getType() {
 
 std::any Literal::getValue() {
   if(this->tok.type == TokenType::FLOAT) {
-    return std::any_cast<float>(this->tok.data);
+    return std::stof(std::any_cast<std::string>(this->tok.data));
   } else if (this->tok.type == TokenType::STRING) {
     return std::any_cast<std::string>(this->tok.data);
-  } else if(this->tok.type == TokenType::STRING) {
-   return std::any_cast<int>(this->tok.data);
+  } else if(this->tok.type == TokenType::INT) {
+    return std::stoi(std::any_cast<std::string>(this->tok.data));
   } else {
     throw std::runtime_error("Invalid Literal value");
   }
