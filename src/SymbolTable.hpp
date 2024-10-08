@@ -15,6 +15,7 @@ public:
   SymbolTable();
 
   void add(std::string name, std::any value);
+  std::any get(std::string name);
   std::map<std::string, std::any>& getTable();
   bool isInTable(std::string name);
   void remove(std::string name);

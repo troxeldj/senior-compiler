@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
     }
     Lexer lexer = Lexer(fileContents);
     lexer.makeTokens();
-    std::vector<std::optional<Token>> tokens = lexer.getTokens();
+    std::vector<Token> tokens = lexer.getTokens();
     Parser parser = Parser(tokens);
     std::vector<std::unique_ptr<Expr>> ast = parser.parseProgram();
     Interpreter interpreter = Interpreter(std::move(ast));

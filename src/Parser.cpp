@@ -2,9 +2,7 @@
 #include "ParserTypes.hpp"
 #include "util.hpp"
 
-  Parser::Parser(std::vector<std::optional<Token>> tokens)
-  {
-    this->tokens = tokens;
+  Parser::Parser(std::vector<Token>& tokens) : tokens(tokens) {
     curIndex = 0;
     tokLen = tokens.size();
   }
@@ -19,73 +17,69 @@
     return this->curIndex >= (tokLen - 1);
   }
 
-  std::optional<Token> Parser::consume() {
-    if (isAtEnd())
-    {
-      return std::nullopt;
+  Token Parser::consume() {
+    if (isAtEnd()) {
+      throw ParserException("No more tokens to consume.");
     }
     return this->tokens[this->curIndex++];
   }
 
-  std::optional<Token> Parser::peek(int num = 1) {
-    if (this->curIndex + num >= this->tokLen)
-    {
-      return std::nullopt;
+  Token Parser::peek(int num = 1) {
+    if (this->curIndex + num >= this->tokLen) {
+      throw ParserException("No more tokens to peek.");
     }
     return this->tokens[this->curIndex + num];
   }
 
   void Parser::consumeParens() {
-    while(currentToken().value().type == TokenType::LPAREN)
+    while(currentToken().type == TokenType::LPAREN)
       consume();
   }
 
   bool Parser::isBinaryOp() {
     consumeParens();
     return (
-      (currentToken().has_value() && currentToken().value().isNumberToken()) && 
-      (peek(1).has_value() && peek(1)->isOperatorToken()) &&
-      (peek(2).has_value() && peek(2)->isNumberToken())
+      (currentToken().isNumberToken()) && 
+      (peek(1).isOperatorToken()) &&
+      (peek(2).isNumberToken())
     );
   }
 
   bool Parser::isUnaryOp() {
     consumeParens();
     return (
-      (currentToken().has_value() && currentToken().value().isOperatorToken()) &&
-      (peek(1).has_value() && peek(1).value().isNumberToken())
+      (currentToken().isOperatorToken()) &&
+      (peek(1).isNumberToken())
     );
   }
 
   bool Parser::isNewline() {
-    return currentToken().value().type == TokenType::NEWLINE;
+    return currentToken().type == TokenType::NEWLINE;
   }
 
   bool Parser::isVarDecl() {
     return (
       (
-        currentToken().has_value()
-        && currentToken().value().type == TokenType::KEYWORD
-        && isDataType(std::any_cast<std::string>(currentToken().value().data))
+        currentToken().type == TokenType::KEYWORD
+        && isDataType(std::any_cast<std::string>(currentToken().data))
       ) 
-      && (peek(1).has_value() && peek(1).value().type == IDENTIFIER)
-      && (peek(2).has_value() && peek(2).value().type == EQUAL)
-      && peek(3).has_value()
+      && (peek(1).type == IDENTIFIER)
+      && (peek(2).type == EQUAL)
     );
   }
 
   bool Parser::isTerm() {
-    if(currentToken().value().isNumberToken()) return true;
+    if(currentToken().isNumberToken()) return true;
     return false;
   }
 
   bool Parser::isString() {
-    if(currentToken().has_value() && currentToken().value().type == TokenType::STRING) 
+    if(currentToken().type == TokenType::STRING) 
       return true;
     return false;
   }
 
-  std::optional<Token> Parser::currentToken() {
+  Token Parser::currentToken() {
     return this->tokens[this->curIndex];
   }
 
@@ -120,7 +114,7 @@
       throw ParserException("Expected Expression.");
     }
 
-    while (currentToken()->type == TokenType::RPAREN) {
+    while (currentToken().type == TokenType::RPAREN) {
       consume(); 
     }
     
@@ -129,8 +123,8 @@
 
   std::unique_ptr<Expr> Parser::parseBinaryExpr() {
     std::unique_ptr<Expr> left = parseFact();
-    while(currentToken().value().isPlusMinus()) {
-      Token operate = consume().value();
+    while(currentToken().isPlusMinus()) {
+      Token operate = consume();
       std::unique_ptr<Expr> right = parseFact();
       left = std::make_unique<BinaryExpr>(left, operate, right);
     }
@@ -138,17 +132,17 @@
   }
 
   std::unique_ptr<Expr> Parser::parseUnaryExpr() {
-    if(!currentToken().value().isOperatorToken()) {
+    if(!currentToken().isOperatorToken()) {
       throw ParserException("Expected Operator");
     }
-    Token operate = consume().value();
+    Token operate = consume();
     std::unique_ptr<Expr> left = parseTerm();
     return std::make_unique<UnaryExpr>(operate, left);
   }
 
   std::unique_ptr<Expr> Parser::parseVarDecl() {
-    std::string dataType = std::any_cast<std::string>(consume().value().data);
-    std::string identName = std::any_cast<std::string>(consume().value().data);
+    std::string dataType = std::any_cast<std::string>(consume().data);
+    std::string identName = std::any_cast<std::string>(consume().data);
     // consume =
     consume();
     return std::make_unique<VarDecl>(identName, dataType, std::move(parseExpr()));
@@ -156,8 +150,8 @@
 
   std::unique_ptr<Expr> Parser::parseFact() {
     std::unique_ptr<Expr> left = parseParen();
-    while(currentToken()->isMulDiv()) {
-      Token operate = consume().value();
+    while(currentToken().isMulDiv()) {
+      Token operate = consume();
       std::unique_ptr<Expr> right = parseParen();
       left = std::make_unique<BinaryExpr>(BinaryExpr(left, operate, right));
     }
@@ -166,11 +160,11 @@
 
   std::unique_ptr<Expr> Parser::parseParen() {
     // parenthesized expr
-    while(currentToken()->type == TokenType::LPAREN) {
+    while(currentToken().type == TokenType::LPAREN) {
       // consume l paren 
       consume();
       std::unique_ptr<Expr> expr = parseExpr();
-      if(currentToken().value().type != TokenType::RPAREN) {
+      if(currentToken().type != TokenType::RPAREN) {
         throw ParserException("Expected right paren token");
       }
     }
@@ -178,7 +172,7 @@
   }
 
   std::unique_ptr<Expr> Parser::parseTerm() {
-    if(!currentToken()->isNumberToken()) {
+    if(!currentToken().isNumberToken()) {
       throw ParserException("Expected Number");
     }
     std::optional<Token> curTok = consume();

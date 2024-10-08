@@ -21,12 +21,12 @@ void Interpreter::visitVarDecl(VarDecl* varDecl) {
 void Interpreter::visitIdentifier(Identifier* ident) {
   //if already in symbol table, update value
   if (symbolTable.isInTable(ident->getName())) {
-    if(ident->value->getValue().type() != symbolTable.getTable()[ident->getName()].type()) {
+    if(ident->value->getValue().type() != symbolTable.get(ident->getName()).type()) {
       throw std::runtime_error("Type mismatch");
     }
   }
   // add to symbol table
-  symbolTable.add(ident->getName(), std::move(ident->value->getValue()));
+  symbolTable.add(ident->getName(), ident->value->getValue());
 }
 
 void Interpreter::interpretProgram() {

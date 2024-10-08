@@ -1,5 +1,5 @@
 #include "SymbolTable.hpp"
-
+#include <stdexcept>
 SymbolTable::SymbolTable() {
   table = std::map<std::string, std::any>();
 }
@@ -14,6 +14,13 @@ bool SymbolTable::isInTable(std::string name) {
 
 std::map<std::string, std::any>& SymbolTable::getTable() {
   return table;
+}
+
+std::any SymbolTable::get(std::string name) {
+  if(!isInTable(name)) {
+    throw std::runtime_error("Variable " + name + " not found");
+  }
+  return table[name];
 }
 
 void SymbolTable::remove(std::string name) {

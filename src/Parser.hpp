@@ -11,18 +11,18 @@
 class Parser
 {
 private:
-  std::vector<std::optional<Token>> tokens;
+  std::vector<Token>& tokens;
   int curIndex;
   int tokLen;
 
 public:
-  Parser(std::vector<std::optional<Token>>);
+  Parser(std::vector<Token>&);
   ~Parser();
   bool hasNextToken();
 
-  std::optional<Token> consume();
-  std::optional<Token> currentToken();
-  std::optional<Token> peek(int num);
+  Token consume();
+  Token currentToken();
+  Token peek(int num);
 
   bool isAtEnd();
 

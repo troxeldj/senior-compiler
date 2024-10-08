@@ -25,7 +25,7 @@ char Lexer::consume() {
   return this->fileContents.at(this->cur_index++);
 }
 
-std::vector<std::optional<Token>> Lexer::getTokens() {
+std::vector<Token>& Lexer::getTokens() {
   return this->tokens;
 }
 
@@ -35,21 +35,29 @@ void Lexer::makeTokens() {
     throw std::runtime_error("Empty buffer");
   }
   while(cur_index <= contLength) {
-    std::optional<Token> token = makeToken(curChar);
-    if(token != std::nullopt) {
-      tokens.push_back(token);
-    }
-    if(cur_index == contLength) {
-      curChar = peek();
-      cur_index++;
-    } else {
+    if(curChar == '\n' || curChar == '\t' || curChar == ' ') {
       curChar = consume();
+      continue;
+    }
+    Token token = makeToken(curChar);
+    tokens.push_back(token); 
+    if(!isAtEnd()) {
+      curChar = consume();
+    } else {
+      break;
     }
   }
-  tokens.push_back(Token(TokenType::_EOF, ""));
+  if(cur_index == contLength) {
+    curChar = peek();
+    cur_index++;
+  } else {
+    curChar = consume();
+  }
+  // add EOF token
+  tokens.push_back({TokenType::_EOF, ""});
 }
 
-std::optional<Token> Lexer::makeNumber(char currChar) {
+Token Lexer::makeNumber(char currChar) {
   std::string numberString = "";
   bool hasDot = false;
   numberString.push_back(currChar);
@@ -91,12 +99,9 @@ std::string Lexer::makeWord(char currChar) {
   return retVal;
 }
 
-std::optional<Token> Lexer::makeToken(char currChar) {
+Token Lexer::makeToken(char currChar) {
   // Whitespace
-  if(currChar == '\n' || currChar == '\t' || currChar == ' ') {
-      return std::nullopt;
-  // Numbers
-  } else if (isdigit(currChar)) {
+  if (isdigit(currChar)) {
     return makeNumber(currChar);
   // Math operators
   } else if (currChar == '+') {

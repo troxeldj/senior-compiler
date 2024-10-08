@@ -10,7 +10,7 @@
 
 class Lexer {
   std::string fileContents;
-  std::vector<std::optional<Token>> tokens;
+  std::vector<Token> tokens;
   int cur_index;
   int contLength;
 
@@ -23,12 +23,12 @@ public:
   void makeTokens();
   char consume();
 
-  std::optional<Token> makeNumber(char);
+  Token makeNumber(char);
   std::string makeWord(char);
-  std::optional<Token> makeToken(char);
+  Token makeToken(char);
 
   void addToken(TokenType, std::any);
-  std::vector<std::optional<Token>> getTokens();
+  std::vector<Token>& getTokens();
 };
 
 #endif

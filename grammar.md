@@ -4,14 +4,14 @@ Program -> (Expr)*
 VarDecl -> Datatype Identifier "=" Expr
 Expr = BinaryExpr | UnaryExpr | VarDecl 
 Literal -> Datatype Expr
-Datatype -> "string" | "int" | "float"
-Identifier -> [a-zA-Z0-9_]*
 BinaryExpr -> Fact (+ | -) Fact | Fact
 UnaryExpr -> (+ | -) Fact
 Fact -> Paren (* | /) Paren | Paren
-Paren -> "(" Expr ")" | Term | Identifier
+Paren -> "(" Expr ")" | Term | identifier
 Term -> 1,2,3...
 String -> '"' [a-zA-Z_]*
+Identifier -> [a-zA-Z0-9_]*
+Datatype -> "string" | "int" | "float"
 
 LL1 - How many lookahead
         - 1 = How many

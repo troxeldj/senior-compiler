@@ -9,5 +9,5 @@ void Identifier::accept(Visitor* vis) {
 }
 
 std::any Identifier::getValue() {
-  return this->value;
+  return std::move(this->value->getValue());
 }
