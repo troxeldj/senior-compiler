@@ -174,3 +174,111 @@ logic where needed
 
 ## ABET Concerns Essay
 
+There are many constraints that need to be considered when developing a software
+project. Ensuring your software best fits your target audience, and ensuring it's
+maintainable are just two things vital to the success of a software product. Our product, a
+programming language compiler, also has some constraints pertaining to the way you
+design the system. In this short essay, we discuss potential ethical, legal, and security
+constraints that come with designing a compiler.
+
+We strive for the compiler to be in good ethical standards. It's important that we keep all
+user input, and potentially user information private and secure. It's also important to ensure
+that our compiler is easy to use and is accessible to the greatest number of people.
+Through clear exception handling and error messages, we can ensure these ethical
+properties are met.
+
+Legal constraints are an often overlooked area. There's a lot of great tooling that comes
+with compiler development. We need to ensure we responsibly use open-source software
+and abide by the license that accompanies this code. If we later introduce usage analytics,
+we also need to ensure this user information is kept confidential between the user and the
+system. Abiding by these legal constraints will assist in making our compiler much more
+secure and in good standing from a legal standpoint.
+One last area of consideration is security. This ties closely into the constraints we
+mentioned in the previous two areas. One important thing to consider is malicious user
+input. Our compiler should be able to handle malicious input and handle this input in a
+predictable manner. One other consideration is memory safety. The compiler is written in
+C++, so it's important we take advantage of modern C++ features such as smart pointers
+to ensure memory safety in our product and prevent exploitation (such as buffer overflow,
+etc).
+
+## PPT Slideshow
+
+[Powerpoint Slideshow Link]()
+
+## Self-Assessment Essay
+
+For my senior project, I will be developing a compiler. Compilers are very interesting pieces of
+technology that take source code of one format and compile them into a binary that can actually
+be ran on a machine. During the transition from source code to the target code, the compiler
+may generate many intermediate forms. Compilers for languages such as C or Go can get
+pretty complex! Compiler design is an area of software engineering that I do not have much
+experience in. However, learning how to write things such as parsers can be helpful in other
+areas as well. I personally, thought this project was good to expand my horizons and work on
+something that I haven't seen before.
+
+Thus far in my compute science degree, I have taken many classes with material relevant to
+compiler development. One course that comes to mind is EECE4029 or "Operating Systems
+and Systems Programming". Compilers rely heavily on OS features and knowing how they work
+is imperative to building a good compiler. Another noteworthy class that comes to mind is
+CS4071 or "Design and Analysis of Algorithms". This class' material will come in handy all
+throughout the the compiler and in areas such as building an abstract syntax tree. Some other
+helpful classes include EECE3093C - Software Engineering (For keeping organized and
+learning OOP concepts), CS4065 - Computer Networks and Networked Computing (For
+working with low-level networking libraries and how networking works), and CS3003 -
+Programming Languages (For understanding how programming languages function). These
+classes are fundamental to a lot of projects that you start and I feel a lot better knowing that I
+have all this knowledge in my toolbelt.
+
+Complimenting what I have learned in the class room, I have five semesters of co-op
+experience. My first few co-op semesters I worked as an IT Technician for Metalex
+Manufacturing in Blue Ash, OH. Here I learned a lot about Windows Server, Authentication
+servers, Server hardware assembly, and writing scripts within PowerShell. I also picked up on a
+lot of soft skills within this such as teamwork, communication, time management, and others. I
+also worked (and still do) as a Data Engineering co-op for 84.51 (Kroger's Data Science wing).
+Here I learned how to build production data pipelines. I used technologies such as: Databricks,
+Snowflake, Python, SQL, MySQL, PostreSQL, GitHub, Bash, and others. This co-op in
+particular showed me what production code looks like and how to use technologies such as
+GitHub at a massive scale. I picked up and refined my soft skills here as well.
+
+I am excited about this project because compiler design and development is an area that is new
+to me. I really enjoy just digging into something and think this project was a good idea to do just
+that. I am planning on researching what compilers are, how they work, the components that
+make up a compiler. After gathering information I will structure diagrams to map out exactly how
+the implementation is going to look like. I believe that having a strong foundation will make the
+actual implementation easier later on. Being that I am working on this individually, time
+management will be the key to success.
+
+The actual implementation of the compiler will all be done in C++. I am planning on having this
+compiler generate assembly code (either x86 or x64). I expect that this compiler will be able to
+take in the source code for my custom language and output an executable that can be loaded
+into system memory and executed on a machine. I am planning on making a roadmap with
+dates and stages of development that I will try my best to stick to. With this structured
+approach, I know that if I meet these goals and keep up with the pre-planned steps, I have done
+what is required and that the development is on track. I am super excited to begin this project
+and believe that I will come out of it a more well-rounded computer scientist.
+
+## Professional Biography
+
+[Professional Biography Link](https://github.com/troxeldj/senior-compiler/blob/master/personal-biography.md)
+
+## Budget
+
+There haven't been any expenses for this project. This has all been local development by the team (just me, Dillon Troxell).
+
+There have also been no donations offered or accepted for this project
+
+## Appendix
+
+### External Resources
+[Compilers: Principles, Techniques, and Tools](https://www.amazon.com/Compilers-Principles-Techniques-Tools-2nd/dp/0321486811)
+
+[Crafting Interpreters](https://craftinginterpreters.com/scanning.html)
+
+### My Resources
+[My CPP Implementation of Crafting Interpreters](https://github.com/troxeldj/cppLox)
+
+[My Python Implementation of Crafting Interpreters](https://github.com/troxeldj/lox-interpreter)
+
+[Notes](https://github.com/troxeldj/senior-compiler/notes)
+
+[This Repository](https://github.com/troxeldj/senior-compiler)
