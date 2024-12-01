@@ -5,6 +5,9 @@
   troxeldj@mail.uc.edu
 
 ## Project Description
+
+[Github Link](https://github.com/troxeldj/senior-compiler/blob/master/project_description.md)
+
 A compiler for a custom programming language. This programming language will support constructs such as variables, functions, and classes. 
 
 The compiler will compile down to x86/x64 assembly and will allow the user to execute their programs on their target machine.
@@ -203,7 +206,7 @@ etc).
 
 ## PPT Slideshow
 
-[Powerpoint Slideshow Link]()
+[Powerpoint Slideshow Link](https://github.com/troxeldj/senior-compiler/blob/master/design-report/Senior-Design-Assignment_8_troxeldj.pptx)
 
 ## Self-Assessment Essay
 
