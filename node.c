@@ -5,8 +5,8 @@
 
 struct vector* node_vector = NULL;
 struct vector* node_vector_root = NULL;
-
 struct node* parser_current_body = NULL;
+struct node* parser_current_function = NULL;
 
 void node_set_vector(struct vector* vec, struct vector* root_vec) {
   node_vector = vec;
@@ -23,8 +23,9 @@ struct node* node_peek() { return *(struct node**)vector_back(node_vector); }
 
 struct node* node_pop() {
   struct node* last_node = vector_back_ptr(node_vector);
-  struct node* last_node_root =
-      vector_empty(node_vector) ? NULL : vector_back_ptr_or_null(node_vector_root);
+  struct node* last_node_root = vector_empty(node_vector)
+                                    ? NULL
+                                    : vector_back_ptr_or_null(node_vector_root);
   vector_pop(node_vector);
 
   if (last_node == last_node_root) {
@@ -47,7 +48,7 @@ struct node* node_peek_expressionable_or_null() {
 }
 
 void make_exp_node(struct node* left_node, struct node* right_node,
-                           const char* op) {
+                   const char* op) {
   assert(left_node);
   assert(right_node);
   node_create(&(struct node){.type = NODE_TYPE_EXPRESSION,
@@ -57,10 +58,11 @@ void make_exp_node(struct node* left_node, struct node* right_node,
 }
 
 void make_bracket_node(struct node* node) {
-  node_create(&(struct node){.type = NODE_TYPE_BRACKET, .bracket.inner=node});
+  node_create(&(struct node){.type = NODE_TYPE_BRACKET, .bracket.inner = node});
 }
 
-void make_body_node(struct vector* body_vec, size_t size, bool padded, struct node* largest_var_node) {
+void make_body_node(struct vector* body_vec, size_t size, bool padded,
+                    struct node* largest_var_node) {
   node_create(&(struct node){.type = NODE_TYPE_BODY,
                              .body.statements = body_vec,
                              .body.size = size,
@@ -70,7 +72,7 @@ void make_body_node(struct vector* body_vec, size_t size, bool padded, struct no
 
 void make_struct_node(const char* name, struct node* body_node) {
   int flags = 0;
-  if(!body_node) {
+  if (!body_node) {
     flags |= NODE_FLAG_IS_FORWARD_DECLARATION;
   }
 
@@ -81,27 +83,42 @@ void make_struct_node(const char* name, struct node* body_node) {
                              .flags = flags});
 }
 
+void make_function_node(struct datatype* ret_type, const char* name,
+                        struct vector* arguments, struct node* body_node) {
+  struct node* func_node =
+      node_create(&(struct node){.type = NODE_TYPE_FUNCTION,
+                                 .func.name = name,
+                                 .func.args.stack_addition=DATA_SIZE_DDWORD,
+                                 .func.args.vector = arguments,
+                                 .func.body_n = body_node,
+                                 .func.rtype = *ret_type});
+
+  #warning "Don't forget to build frame elements."
+}
+
 struct node* node_from_sym(struct symbol* sym) {
-  if(sym->type != SYMBOL_TYPE_NODE) {
+  if (sym->type != SYMBOL_TYPE_NODE) {
     return NULL;
   }
   return sym->data;
 }
 
-struct node* node_from_symbol(struct compile_process* current_process, const char* name) {
+struct node* node_from_symbol(struct compile_process* current_process,
+                              const char* name) {
   struct symbol* sym = symresolver_get_symbol(current_process, name);
-  if(!sym) {
+  if (!sym) {
     return NULL;
   }
   return node_from_sym(sym);
 }
 
-struct node* struct_node_for_name(struct compile_process* current_process, const char* name) {
+struct node* struct_node_for_name(struct compile_process* current_process,
+                                  const char* name) {
   struct node* node = node_from_symbol(current_process, name);
-  if(!node) {
+  if (!node) {
     return NULL;
   }
-  if(node->type != NODE_TYPE_STRUCT) {
+  if (node->type != NODE_TYPE_STRUCT) {
     return NULL;
   }
   return node;
@@ -110,31 +127,32 @@ struct node* struct_node_for_name(struct compile_process* current_process, const
 struct node* node_create(struct node* _node) {
   struct node* node = malloc(sizeof(struct node));
   memcpy(node, _node, sizeof(struct node));
-#warning "We should set the binded owner and binded function here\n"
+  node->binded.owner = parser_current_body;
+  node->binded.function = parser_current_function;
   node_push(node);
   return node;
 }
 
 bool node_is_struct_or_union_variable(struct node* node) {
-  if(node->type != NODE_TYPE_VARIABLE) return false;
+  if (node->type != NODE_TYPE_VARIABLE) return false;
   return datatype_is_struct_or_union(&node->var.type);
 }
 
 struct node* variable_node(struct node* node) {
   struct node* var_node = NULL;
-  switch(node->type) {
+  switch (node->type) {
     case NODE_TYPE_VARIABLE:
       var_node = node;
-    break;
+      break;
 
     case NODE_TYPE_STRUCT:
       var_node = node->_struct.var;
-    break; 
+      break;
 
     case NODE_TYPE_UNION:
       // var_node = node->_union.var;
       assert(1 == 0 && "Unions are not implemented");
-    break;
+      break;
   }
   return var_node;
 }
@@ -145,7 +163,7 @@ bool variable_node_is_primitive(struct node* node) {
 }
 
 struct node* variable_node_or_list(struct node* node) {
-  if(node->type == NODE_TYPE_VARIABLE_LIST) {
+  if (node->type == NODE_TYPE_VARIABLE_LIST) {
     return node;
   }
 
