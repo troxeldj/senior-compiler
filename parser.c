@@ -608,10 +608,9 @@ void make_variable_node_and_register(struct history* history,
   make_variable_node(dtype, name_token, value_node);
   struct node* var_node = node_pop();
 
-#warning \
-    "Remember to calculate scope offset and push variable node to the scope"
   // calculate the scope offset
   parser_scope_offset(var_node, history);
+
   // push variable node to the scope
   parser_scope_push(parser_new_scope_entity(var_node, var_node->var.aoffset, 0), var_node->var.type.size);
   node_push(var_node);
