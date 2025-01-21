@@ -305,6 +305,35 @@ struct node {
       // inner would be node* number (50)
       struct node* inner;
     } bracket;
+
+    struct _struct {
+      const char* name;
+      struct node* body_n;
+      /*
+      Example: for
+        struct abc {
+        } var_name; 
+      var would be "var_name"
+      NULL otherwise
+      */
+      struct node* var;
+    } _struct;
+
+    struct body {
+      /* struct node* vector of statements
+      */
+      struct vector* statements;
+
+      // The size of all the variables in the body
+      size_t size;
+
+      // true if the variable size had to be increased due to padding
+      bool padded;
+
+
+      // pointer to largest variable node in the statement vector
+      struct node* largest_var_node;
+    } body;
   };
 
   union {
@@ -387,11 +416,23 @@ bool token_is_nl_or_comment_or_newline_seperator(struct token* token);
 bool keyword_is_datatype(const char* str);
 bool token_is_primitive_keyword(struct token* token);
 bool datatype_is_struct_or_union_for_name(const char* name);
+bool datatype_is_struct_or_union(struct datatype* dtype);
+size_t datatype_element_size(struct datatype* dtype);
+size_t datatype_size_for_array_access(struct datatype* dtype);
+size_t datatype_size_no_ptr(struct datatype* dtype);
+size_t datatype_size(struct datatype* dtype);
+
+// Gets variable size from a given variable node
+size_t variable_size(struct node* var_node);
+// Sums variable size for all variables in a variable list node
+size_t variable_size_for_list(struct node* var_list_node);
+
 bool token_is_operator(struct token* token, const char* val);
 
 struct node* node_create(struct node* _node);
 void make_exp_node(struct node* left_node, struct node* right_node, const char* op);
 void make_bracket_node(struct node* node);
+void make_body_node(struct vector* body_vec, size_t size, bool padded, struct node* largest_var_node);
 
 struct node* node_pop();
 struct node* node_peek();

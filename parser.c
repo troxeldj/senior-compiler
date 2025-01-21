@@ -5,6 +5,7 @@
 
 static struct compile_process* current_process;
 static struct token* parser_last_token;
+extern struct node* parser_current_body;
 
 extern struct expressionable_op_precedence_group
     op_precedence[TOTAL_OPERATOR_GROUPS];
@@ -30,16 +31,9 @@ struct history* history_down(struct history* history, int flags) {
 int parse_expressionable_single(struct history* history);
 void parse_expressionable(struct history* history);
 
-void parser_scope_new() {
-  scope_new(current_process, 0);
-}
+void parser_scope_new() { scope_new(current_process, 0); }
 
-void parser_scope_finish() {
-  scope_finish(current_process);
-}
-
-static bool token_next_is_symbol(char c) {
-}
+void parser_scope_finish() { scope_finish(current_process); }
 
 static void parser_ignore_nl_or_comment(struct token* token) {
   while (token && token_is_nl_or_comment_or_newline_seperator(token)) {
@@ -49,28 +43,32 @@ static void parser_ignore_nl_or_comment(struct token* token) {
   }
 }
 
-
 static struct token* token_next() {
   struct token* next_token =
       vector_peek_no_increment(current_process->token_vec);
   parser_ignore_nl_or_comment(next_token);
-  if(next_token)
-    current_process->pos = next_token->pos;
+  if (next_token) current_process->pos = next_token->pos;
   parser_last_token = next_token;
   return vector_peek(current_process->token_vec);
 }
 
 static void expect_sym(char c) {
   struct token* next_token = token_next();
-  if(!next_token || next_token->type != TOKEN_TYPE_SYMBOL || next_token->cval != c) {
-    compiler_error(current_process, "Expected symbol %c, however, something else was provided.\n", c);
+  if (!next_token || next_token->type != TOKEN_TYPE_SYMBOL ||
+      next_token->cval != c) {
+    compiler_error(
+        current_process,
+        "Expected symbol %c, however, something else was provided.\n", c);
   }
 }
 
 static void expect_op(const char* op) {
   struct token* next_token = token_next();
-  if(!next_token || next_token->type != TOKEN_TYPE_OPERATOR || !S_EQ(next_token->sval, op)) {
-    compiler_error(current_process, "Expected operator %s, however, something else was provided.\n", op);
+  if (!next_token || next_token->type != TOKEN_TYPE_OPERATOR ||
+      !S_EQ(next_token->sval, op)) {
+    compiler_error(
+        current_process,
+        "Expected operator %s, however, something else was provided.\n", op);
   }
 }
 
@@ -506,14 +504,15 @@ void make_variable_node_and_register(struct history* history,
 }
 
 void make_variable_list_node(struct vector* list_vec) {
-  node_create(&(struct node){.type = NODE_TYPE_VARIABLE_LIST, .var_list.list = list_vec});
+  node_create(&(struct node){.type = NODE_TYPE_VARIABLE_LIST,
+                             .var_list.list = list_vec});
 }
 
 struct array_brackets* parse_array_brackets(struct history* history) {
   struct array_brackets* brackets = array_brackets_new();
-  while(token_next_is_operator("[")) {
+  while (token_next_is_operator("[")) {
     expect_op("[");
-    if(token_is_symbol(token_peek_next(), ']')) {
+    if (token_is_symbol(token_peek_next(), ']')) {
       // Nothing between brackets
       expect_sym(']');
       break;
@@ -535,7 +534,7 @@ void parse_variable(struct datatype* dtype, struct token* name_token,
   struct node* value_node = NULL;
   // int a; int b[30];
   struct array_brackets* brackets = NULL;
-  if(token_next_is_operator("[")) {
+  if (token_next_is_operator("[")) {
     brackets = parse_array_brackets(history);
     dtype->array.brackets = brackets;
     dtype->array.size = array_brackets_calculate_size(dtype, brackets);
@@ -550,36 +549,111 @@ void parse_variable(struct datatype* dtype, struct token* name_token,
   make_variable_node_and_register(history, dtype, name_token, value_node);
 }
 
-void parse_struct_no_new_scope(struct datatype* dtype) {
-  
+void parse_symbol() {
+  compiler_error(current_process, "Symbol parsing is not implemented\n");
 }
+
+void parse_statement(struct history* history) {
+  if (token_peek_next()->type == TOKEN_TYPE_KEYWORD) {
+    parse_keyword(history);
+    return;
+  }
+  parse_expressionable_root(history);
+  if (token_peek_next()->type == TOKEN_TYPE_SYMBOL &&
+      !token_is_symbol(token_peek_next(), ';')) {
+    parse_symbol();
+    return;
+  }
+  // all statements must end with a semicolon
+  expect_sym(';');
+}
+
+void parser_append_size_for_node(struct history* history, size_t* variable_size,
+                                 struct node* node) {
+  compiler_warning(current_process,
+                   "Appending size for node is not implemented\n");
+}
+
+void parser_finalize_body(struct history* history, struct node* body_node,
+                          struct vector* body_vec, size_t* variable_size,
+                          struct node* largest_align_eligable_var_node,
+                          struct node* largest_possible_var_node) {
+                            body_node->body.largest_var_node = largest_align_eligable_var_node;
+                            body_node->body.padded = false;
+                            body_node->body.size = *variable_size;
+                            body_node->body.statements = body_vec;
+                          }
+
+void parse_body_single_statement(size_t* variable_size, struct vector* body_vec,
+                                 struct history* history) {
+  make_body_node(NULL, 0, false, NULL);
+  struct node* body_node = node_pop();
+  body_node->binded.owner = parser_current_body;
+  parser_current_body = body_node;
+
+  struct node* statement_node = NULL;
+  parse_statement(history_down(history, history->flags));
+  statement_node = node_pop();
+  vector_push(body_vec, &statement_node);
+
+  // Changes the variable size variable by the size of the statement node
+  parser_append_size_for_node(history, variable_size, statement_node);
+  struct node* largest_var_node = NULL;
+  if (statement_node->type == NODE_TYPE_VARIABLE) {
+    largest_var_node = statement_node;
+  }
+  parser_finalize_body(history, body_node, body_vec, variable_size,
+                      largest_var_node, largest_var_node);
+  parser_current_body = body_node->binded.owner;
+  node_push(body_node);
+}
+
+void parse_body(size_t* variable_size, struct history* history) {
+  parser_scope_new();
+  size_t tmp_size = 0x00;
+  if (!variable_size) {
+    variable_size = &tmp_size;
+  }
+
+  struct vector* body_vec = vector_create(sizeof(struct node*));
+  if (!token_next_is_symbol('{')) {
+    parse_body_single_statement(variable_size, body_vec, history);
+    parser_scope_finish();
+    return;
+  }
+  parser_scope_finish();
+}
+
+void parse_struct_no_new_scope(struct datatype* dtype) {}
 
 void parse_struct(struct datatype* dtype) {
   bool is_forward_declaration = !token_is_symbol(token_peek_next(), '{');
   // if isn't forward declaration, then we must have a scope
-  if(!is_forward_declaration) {
+  if (!is_forward_declaration) {
     parser_scope_new();
   }
 
   parse_struct_no_new_scope(dtype);
 
-  if(!is_forward_declaration) {
+  if (!is_forward_declaration) {
     parser_scope_finish();
   }
 }
 
 void parse_struct_or_union(struct datatype* dtype) {
-  switch(dtype->type) {
+  switch (dtype->type) {
     case DATA_TYPE_STRUCT:
       parse_struct(dtype);
-    break;
+      break;
 
     case DATA_TYPE_UNION:
-    break;
+      break;
 
     default:
-      compiler_error(current_process, "COMPILER BUG: The provided data type is not a struct or union.\n");
-    break;
+      compiler_error(
+          current_process,
+          "COMPILER BUG: The provided data type is not a struct or union.\n");
+      break;
   }
 }
 
@@ -587,7 +661,7 @@ void parse_variable_function_or_struct_union(struct history* history) {
   struct datatype dtype;
   parse_datatype(&dtype);
 
-  if(datatype_is_struct_or_union(&dtype) && token_next_is_symbol('{')) {
+  if (datatype_is_struct_or_union(&dtype) && token_next_is_symbol('{')) {
     parse_struct_or_union(&dtype);
   }
   // ignore integer abbreviations if necessary i.e "long int" becomes "long"
@@ -601,12 +675,12 @@ void parse_variable_function_or_struct_union(struct history* history) {
   // Check if this is a function declaration
 
   parse_variable(&dtype, name_token, history);
-  if(token_is_operator(token_peek_next(), ",")) {
-    struct vector* var_list = vector_create(sizeof(struct node*)); 
+  if (token_is_operator(token_peek_next(), ",")) {
+    struct vector* var_list = vector_create(sizeof(struct node*));
     // Pop off original variable
     struct node* var_node = node_pop();
     vector_push(var_list, &var_node);
-    while(token_is_operator(token_peek_next(), ",")) {
+    while (token_is_operator(token_peek_next(), ",")) {
       // Get rid of comma
       token_next();
       name_token = token_next();
