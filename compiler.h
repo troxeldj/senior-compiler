@@ -230,7 +230,9 @@ enum {
 };
 
 enum {
-  NODE_FLAG_INSIDE_EXPRESSION = 0b00000001
+  NODE_FLAG_INSIDE_EXPRESSION = 0b00000001,
+  NODE_FLAG_IS_FORWARD_DECLARATION = 0b00000010,
+  NODE_FLAG_HAS_VARIABLE_COMBINED = 0b00000100
 };
 // forward declare
 struct node;
@@ -266,7 +268,7 @@ struct datatype {
     struct array_brackets* brackets;
     // size = datatype_size * sizeof(brackets)
     size_t size;
-  }array;
+  } array;
 };
 
 struct node {
@@ -291,6 +293,9 @@ struct node {
 
     struct var {
       struct datatype type;
+      int padding;
+      // aligned offset
+      int aoffset;
       const char* name;
       struct node* value;
     } var;
@@ -421,11 +426,21 @@ size_t datatype_element_size(struct datatype* dtype);
 size_t datatype_size_for_array_access(struct datatype* dtype);
 size_t datatype_size_no_ptr(struct datatype* dtype);
 size_t datatype_size(struct datatype* dtype);
+bool datatype_is_primitive(struct datatype* dtype);
 
+struct node* variable_struct_or_union_body_node(struct node* node);
 // Gets variable size from a given variable node
 size_t variable_size(struct node* var_node);
 // Sums variable size for all variables in a variable list node
 size_t variable_size_for_list(struct node* var_list_node);
+struct node* variable_node(struct node* node);
+bool variable_node_is_primitive(struct node* node);
+struct node* variable_node_or_list(struct node* node);
+
+int padding(int val, int to);
+int align_value(int val, int to);
+int align_value_treat_positive(int val, int to);
+int compute_sum_padding(struct vector* vec);
 
 bool token_is_operator(struct token* token, const char* val);
 
@@ -433,6 +448,7 @@ struct node* node_create(struct node* _node);
 void make_exp_node(struct node* left_node, struct node* right_node, const char* op);
 void make_bracket_node(struct node* node);
 void make_body_node(struct vector* body_vec, size_t size, bool padded, struct node* largest_var_node);
+void make_struct_node(const char* name, struct node* body_node);
 
 struct node* node_pop();
 struct node* node_peek();
@@ -442,7 +458,7 @@ void node_set_vector(struct vector* vec, struct vector* root_vec);
 
 bool node_is_expressionable(struct node* node);
 struct node* node_peek_expressionable_or_null();
-
+bool node_is_struct_or_union_variable(struct node* node);
 struct array_brackets* array_brackets_new();
 void array_brackets_free(struct array_brackets* brackets);
 void array_brackets_add(struct array_brackets* brackets, struct node* bracket_node);
@@ -467,6 +483,17 @@ void scope_push(struct compile_process* process, void* ptr, size_t elem_size);
 void scope_finish(struct compile_process* process);
 struct scope* scope_current(struct compile_process* process);
 struct scope* scope_root(struct compile_process* process);
+
+void symresolver_build_for_node(struct compile_process* process, struct node* node);
+struct symbol* symresolver_get_symbol(struct compile_process* process, const char* name);
+void symresolver_initialize(struct compile_process* process);
+void symresolver_new_table(struct compile_process* process);
+void symresolver_end_table(struct compile_process* process);
+
+
+struct node* node_from_sym(struct symbol* sym);
+struct node* node_from_symbol(struct compile_process* current_process, const char* name);
+struct node* struct_node_for_name(struct compile_process* current_process, const char* name);
 
 #define TOTAL_OPERATOR_GROUPS 14
 #define MAX_OPERATORS_IN_GROUP 12

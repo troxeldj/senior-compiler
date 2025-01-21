@@ -491,6 +491,8 @@ struct token* read_next_token() {
     case '\n':
       token = token_make_newline();
       break;
+
+    case EOF:
     case (unsigned char)EOF:
       // We have finished lexical analysis on the file
       break;

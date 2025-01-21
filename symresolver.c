@@ -1,5 +1,6 @@
 #include "compiler.h"
 #include "helpers/vector.h"
+
 static void symresolver_push_symbol(struct compile_process* process, struct symbol* sym) {
 	vector_push(process->symbols.table, &sym);
 }
@@ -71,7 +72,11 @@ void symresolver_build_for_function_node(struct compile_process* process, struct
 }
 
 void symresolver_build_for_structure_node(struct compile_process* process, struct node* node) {
-	compiler_error(process, "Structures not yet supported.\n");
+	// Don't register a forward declaration
+	if(node->flags & NODE_FLAG_IS_FORWARD_DECLARATION) {
+		return;
+	}
+	symresolver_register_symbol(process, node->_struct.name, SYMBOL_TYPE_NODE, node);
 }
 
 void symresolver_build_for_union_node(struct compile_process* process, struct node* node) {

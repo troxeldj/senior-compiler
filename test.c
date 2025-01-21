@@ -1,3 +1,5 @@
-struct abc {
-
+struct dog
+{
+	int x;
+	int y;
 };
