@@ -1274,6 +1274,9 @@ void parse_return(struct history* history) {
   expect_sym(';');
 }
 
+void parse_continue(struct history* history);
+void parse_break(struct history* history);
+
 void parse_keyword(struct history* history) {
   struct token* token = token_peek_next();
   if (is_keyword_variable_modifier(token->sval) ||
@@ -1300,8 +1303,26 @@ void parse_keyword(struct history* history) {
   } else if(S_EQ(token->sval, "switch")) {
     parse_switch(history);
     return;
+  } else if(S_EQ(token->sval, "break")) {
+    parse_break(history);
+    return;
+  } else if(S_EQ(token->sval, "continue")) {
+    parse_continue(history);
+    return;
   }
 
+}
+
+void parse_continue(struct history* history) {
+  expect_keyword("continue");
+  expect_sym(';');
+  make_continue_node();
+}
+
+void parse_break(struct history* history) {
+  expect_keyword("break");
+  expect_sym(';');
+  make_break_node();
 }
 
 int parse_expressionable_single(struct history* history) {
