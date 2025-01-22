@@ -602,6 +602,9 @@ void node_set_vector(struct vector* vec, struct vector* root_vec);
 bool node_is_expressionable(struct node* node);
 bool node_is_expression_or_parentheses(struct node* node);
 bool node_is_value_type(struct node* node);
+bool node_is_expression(struct node* node, const char* op);
+bool is_array_node(struct node* node);
+bool is_node_assignment(struct node* node);
 struct node* node_peek_expressionable_or_null();
 bool node_is_struct_or_union_variable(struct node* node);
 
