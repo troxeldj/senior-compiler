@@ -1,9 +1,6 @@
 int main() {
-	if(1) {
-		int y = 50;
-	} else if(2) {
-		int xx = 40;
-	} else {
-		int d = 44;
+	int i = 0;
+	for(i = 0; i < 30; i+=1) {
+
 	}
 }

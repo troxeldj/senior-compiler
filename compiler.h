@@ -372,6 +372,12 @@ struct node {
     } func;
 
     struct statement {
+      struct return_stmt {
+        // expression of the return statement
+        // i.e: return *expr*
+        struct node* exp;
+      } return_stmt;
+
       struct if_stmt {
         // if(*CONDITION*) {*BODY*}
         //  points to a body node
@@ -381,6 +387,13 @@ struct node {
         // {ELSE}
         struct node* next;
       } if_stmt;
+
+      struct for_stmt {
+        struct node* init_node;
+        struct node* condition_node;
+        struct node* loop_node;
+        struct node* body_node;
+      } for_stmt;
 
       struct else_stmt {
        struct node* body_node; 
@@ -508,6 +521,8 @@ void make_body_node(struct vector* body_vec, size_t size, bool padded, struct no
 void make_struct_node(const char* name, struct node* body_node);
 
 void make_function_node(struct datatype* ret_type, const char* name, struct vector* arguments, struct node* body_node);
+void make_for_node(struct node* init_node, struct node* condition_node, struct node* loop_node, struct node* body_node);
+void make_return_node(struct node* exp_node);
 void make_if_node(struct node* condition_node, struct node* body_node, struct node* next_node);
 void make_else_node(struct node* body_node);
 

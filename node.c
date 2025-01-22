@@ -90,19 +90,27 @@ void make_struct_node(const char* name, struct node* body_node) {
 
 void make_function_node(struct datatype* ret_type, const char* name,
                         struct vector* arguments, struct node* body_node) {
-  struct node* func_node =
-      node_create(&(struct node){.type = NODE_TYPE_FUNCTION,
-                                 .func.name = name,
-                                 .func.args.stack_addition = DATA_SIZE_DDWORD,
-                                 .func.args.vector = arguments,
-                                 .func.body_n = body_node,
-                                 .func.rtype = *ret_type});
+  node_create(&(struct node){.type = NODE_TYPE_FUNCTION,
+                             .func.name = name,
+                             .func.args.stack_addition = DATA_SIZE_DDWORD,
+                             .func.args.vector = arguments,
+                             .func.body_n = body_node,
+                             .func.rtype = *ret_type});
 
 #warning "Don't forget to build frame elements."
 }
 
+void make_for_node(struct node* init_node, struct node* condition_node, struct node* loop_node, struct node* body_node) {
+  node_create(&(struct node){.type=NODE_TYPE_STATEMENT_FOR, .stmt.for_stmt.init_node=init_node, .stmt.for_stmt.condition_node=condition_node, .stmt.for_stmt.loop_node=loop_node, .stmt.for_stmt.body_node=body_node});
+}
+
+void make_return_node(struct node* exp_node) {
+  node_create(&(struct node){.type=NODE_TYPE_STATEMENT_RETURN, .stmt.return_stmt.exp=exp_node});
+}
+
 void make_else_node(struct node* body_node) {
-  node_create(&(struct node){.type=NODE_TYPE_STATEMENT_ELSE, .stmt.else_stmt.body_node=body_node});
+  node_create(&(struct node){.type = NODE_TYPE_STATEMENT_ELSE,
+                             .stmt.else_stmt.body_node = body_node});
 }
 
 void make_if_node(struct node* condition_node, struct node* body_node,
