@@ -291,6 +291,11 @@ struct node {
       const char* op;
     } exp;
 
+    struct parentheses {
+      // expression inside of the parentheses node.
+      struct node* exp;
+    } parentheses;
+
     struct var {
       struct datatype type;
       int padding;
@@ -365,6 +370,23 @@ struct node {
       // stack size for all variables in functions
       size_t stack_size;
     } func;
+
+    struct statement {
+      struct if_stmt {
+        // if(*CONDITION*) {*BODY*}
+        //  points to a body node
+        struct node* cond_node;
+        struct node* body_node;
+
+        // {ELSE}
+        struct node* next;
+      } if_stmt;
+
+      struct else_stmt {
+       struct node* body_node; 
+      } else_stmt;
+
+    } stmt;
   };
 
   union {
@@ -480,11 +502,15 @@ bool token_is_operator(struct token* token, const char* val);
 
 struct node* node_create(struct node* _node);
 void make_exp_node(struct node* left_node, struct node* right_node, const char* op);
+void make_exp_parentheses_node(struct node* exp_node);
 void make_bracket_node(struct node* node);
 void make_body_node(struct vector* body_vec, size_t size, bool padded, struct node* largest_var_node);
 void make_struct_node(const char* name, struct node* body_node);
 
 void make_function_node(struct datatype* ret_type, const char* name, struct vector* arguments, struct node* body_node);
+void make_if_node(struct node* condition_node, struct node* body_node, struct node* next_node);
+void make_else_node(struct node* body_node);
+
 struct node* node_pop();
 struct node* node_peek();
 struct node* node_peek_or_null();
@@ -492,8 +518,11 @@ void node_push(struct node* node);
 void node_set_vector(struct vector* vec, struct vector* root_vec);
 
 bool node_is_expressionable(struct node* node);
+bool node_is_expression_or_parentheses(struct node* node);
+bool node_is_value_type(struct node* node);
 struct node* node_peek_expressionable_or_null();
 bool node_is_struct_or_union_variable(struct node* node);
+
 struct array_brackets* array_brackets_new();
 void array_brackets_free(struct array_brackets* brackets);
 void array_brackets_add(struct array_brackets* brackets, struct node* bracket_node);
@@ -525,6 +554,8 @@ void symresolver_initialize(struct compile_process* process);
 void symresolver_new_table(struct compile_process* process);
 void symresolver_end_table(struct compile_process* process);
 struct symbol* symresolver_get_symbol_for_native_function(struct compile_process* process, const char* name);
+
+size_t function_node_argument_stack_addition(struct node* node);
 
 struct node* node_from_sym(struct symbol* sym);
 struct node* node_from_symbol(struct compile_process* current_process, const char* name);
