@@ -438,6 +438,11 @@ struct node {
     struct node_label {
       struct node* name;
     } label;
+
+    struct cast {
+      struct datatype dtype;
+      struct node* operand;
+    } cast;
   };
 
   union {
@@ -553,6 +558,7 @@ bool token_is_operator(struct token* token, const char* val);
 
 struct node* node_create(struct node* _node);
 
+void make_cast_node(struct datatype* dtype, struct node* operand_node);
 void make_ternary_node(struct node* true_node, struct node* false_node);
 void make_case_node(struct node* exp_node);
 void make_label_node(struct node* name_node);
