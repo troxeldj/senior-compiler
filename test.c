@@ -1,3 +1,3 @@
-int main(int x) {
-	x = (int)30;
-}
+union abc {
+	int x;
+} test;

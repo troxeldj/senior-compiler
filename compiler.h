@@ -339,6 +339,19 @@ struct node {
       struct node* var;
     } _struct;
 
+    struct _union {
+      const char* name;
+      struct node* body_n;
+      /*
+      Example: for
+        struct abc {
+        } var_name; 
+      var would be "var_name"
+      NULL otherwise
+      */
+      struct node* var;
+    } _union;
+
     struct body {
       /* struct node* vector of statements
       */
@@ -570,7 +583,7 @@ void make_exp_parentheses_node(struct node* exp_node);
 void make_bracket_node(struct node* node);
 void make_body_node(struct vector* body_vec, size_t size, bool padded, struct node* largest_var_node);
 void make_struct_node(const char* name, struct node* body_node);
-
+void make_union_node(const char* name, struct node* body_node);
 void make_function_node(struct datatype* ret_type, const char* name, struct vector* arguments, struct node* body_node);
 void make_switch_node(struct node* exp_node, struct node* body_node, struct vector* cases, bool has_default_case);
 void make_do_while_node(struct node* body_node, struct node* exp_node);
@@ -629,6 +642,7 @@ size_t function_node_argument_stack_addition(struct node* node);
 struct node* node_from_sym(struct symbol* sym);
 struct node* node_from_symbol(struct compile_process* current_process, const char* name);
 struct node* struct_node_for_name(struct compile_process* current_process, const char* name);
+struct node* union_node_for_name(struct compile_process* current_process, const char* name);
 
 #define TOTAL_OPERATOR_GROUPS 14
 #define MAX_OPERATORS_IN_GROUP 12
@@ -643,4 +657,45 @@ struct expressionable_op_precedence_group {
 	int associativity;
 };
 
+struct fixup;
+// return true if the fixup is successful
+typedef bool (*FIXUP_FIX)(struct fixup* fixup);
+
+// Signifies the fixup has been removed from memory
+// implementor should ensure any memory is freed
+typedef void (*FIXUP_END)(struct fixup* fixup);
+
+struct fixup_config {
+	FIXUP_FIX fix;
+	FIXUP_END end;
+	void* private;
+};
+
+struct fixup_system {
+	// vector of fixups
+	struct vector* fixups;
+};
+
+enum {
+	FIXUP_FLAG_RESOLVED = 0b00000001
+};
+
+struct fixup {
+	int flags;
+	struct fixup_system* system;
+	struct fixup_config config;
+};
+
+struct fixup_system* fixup_sys_new();
+struct fixup_config* fixup_config(struct fixup* fixup);
+void fixup_free(struct fixup* fixup);
+void fixup_start_iteration(struct fixup_system* system);
+struct fixup* fixup_next(struct fixup_system* system);
+void fixup_sys_fixup_free(struct fixup_system* system);
+void fixup_sys_free(struct fixup_system* system);
+int fixup_sys_unresolved_fixups_count(struct fixup_system* system);
+struct fixup* fixup_register(struct fixup_system* system, struct fixup_config* config);
+bool fixup_resolve(struct fixup* fixup);
+void* fixup_private(struct fixup* fixup);
+bool fixups_resolve(struct fixup_system* system);
 #endif
