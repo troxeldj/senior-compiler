@@ -1,6 +1,5 @@
 int main() {
-	int i = 0;
-	while(1) {
+	switch(1) {
 
 	}
 }
