@@ -310,6 +310,11 @@ struct node {
       struct node* value;
     } var;
 
+    struct node_ternary {
+      struct node* true_node;
+      struct node* false_node;
+    } ternary;
+
     struct varlist {
       // list of struct node* variables
       struct vector* list;
@@ -420,7 +425,19 @@ struct node {
         struct vector* cases;
         bool has_default_case;
       } switch_stmt;
+
+      struct _case_stmt {
+        struct node* exp;
+      } _case;
+
+      struct _goto_statement {
+        struct node* label;
+      } _goto;
     } stmt;
+
+    struct node_label {
+      struct node* name;
+    } label;
   };
 
   union {
@@ -536,9 +553,12 @@ bool token_is_operator(struct token* token, const char* val);
 
 struct node* node_create(struct node* _node);
 
+void make_ternary_node(struct node* true_node, struct node* false_node);
+void make_case_node(struct node* exp_node);
+void make_label_node(struct node* name_node);
 void make_continue_node();
 void make_break_node();
-
+void make_goto_node(struct node* label_node);
 void make_exp_node(struct node* left_node, struct node* right_node, const char* op);
 void make_exp_parentheses_node(struct node* exp_node);
 void make_bracket_node(struct node* node);

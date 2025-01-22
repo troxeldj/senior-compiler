@@ -48,7 +48,8 @@ enum {
   HISTORY_FLAG_IS_GLOBAL_SCOPE = 0b00000100,
   HISTORY_FLAG_INSIDE_STRUCTURE = 0b00001000,
   HISTORY_FLAG_INSIDE_FUNCTION_BODY = 0b00010000,
-  HISTORY_FLAG_IN_SWITCH_STATEMENT = 0b00100000
+  HISTORY_FLAG_IN_SWITCH_STATEMENT = 0b00100000,
+  HISTORY_FLAG_PARENTHESES_IS_NOT_A_FUNCTION_CALL = 0b01000000
 };
 
 // pass down commands through recursive functions
@@ -68,6 +69,7 @@ struct history {
   } _switch;
 };
 
+void parse_for_ternary(struct history* history);
 struct vector* parse_function_arguments(struct history* history);
 void parse_expressionable_root(struct history* history);
 
@@ -349,9 +351,22 @@ void parse_for_parentheses(struct history* history) {
   parser_deal_with_additional_expression();
 }
 
+void parse_for_comma(struct history* history) {
+  // skip the comma
+  token_next();
+  struct node* left_node = node_pop();
+  parse_expressionable_root(history);
+  struct node* right_node = node_pop();
+  make_exp_node(left_node, right_node, ",");
+}
+
 int parse_exp(struct history* history) {
   if(S_EQ(token_peek_next()->sval, "(")) {
     parse_for_parentheses(history);
+  } else if(S_EQ(token_peek_next()->sval, "?")) {
+    parse_for_ternary(history);
+  } else if (S_EQ(token_peek_next()->sval, ",")) {
+    parse_for_comma(history);
   } else {
     parse_exp_normal(history);
   }
@@ -793,6 +808,8 @@ void parse_function(struct datatype* ret_type, struct token* name_token, struct 
   parser_scope_finish();
 }
 
+void parse_label(struct history* history);
+
 void parse_symbol() {
   if(token_next_is_symbol('{')) {
     size_t variable_size = 0;
@@ -800,7 +817,12 @@ void parse_symbol() {
     parse_body(&variable_size, history);
     struct node* body_node = node_pop();
     node_push(body_node);
+  } else if(token_next_is_symbol(':')) {
+    parse_label(history_begin(0));
+    return;
   }
+
+  compiler_error(current_process, "Invalid symbol was provided.\n");
 }
 
 void parse_keyword(struct history* history);
@@ -1173,6 +1195,19 @@ void parse_keyword_parentheses_expression(const char* keyword) {
   expect_sym(')');
 }
 
+void parse_case(struct history* history) {
+  expect_keyword("case");
+  parse_expressionable_root(history);
+  struct node* case_exp_node = node_pop();
+  expect_sym(':');
+  make_case_node(case_exp_node);
+  if(case_exp_node->type != NODE_TYPE_NUMBER) {
+    compiler_error(current_process, "We only support numbers for case statements at this time.\n");
+  }
+  struct node* case_node = node_pop();
+  parser_register_case(history, case_node);
+}
+
 void parse_switch(struct history* history) {
   struct parser_history_switch _switch = parser_new_switch_statement(history);
   parse_keyword_parentheses_expression("switch");
@@ -1276,6 +1311,20 @@ void parse_return(struct history* history) {
 
 void parse_continue(struct history* history);
 void parse_break(struct history* history);
+void parse_goto(struct history* history);
+
+void parse_for_ternary(struct history* history) {
+  struct node* condition_node = node_pop();
+  expect_op("?");
+  parse_expressionable_root(history_down(history, HISTORY_FLAG_PARENTHESES_IS_NOT_A_FUNCTION_CALL));
+  struct node* true_res_node = node_pop();
+  expect_sym(':');
+	parse_expressionable_root(history_down(history, HISTORY_FLAG_PARENTHESES_IS_NOT_A_FUNCTION_CALL));
+  struct node* false_res_node = node_pop();
+  make_ternary_node(true_res_node, false_res_node);
+  struct node* ternary_node = node_pop();
+  make_exp_node(condition_node, ternary_node, "?");
+}
 
 void parse_keyword(struct history* history) {
   struct token* token = token_peek_next();
@@ -1309,7 +1358,15 @@ void parse_keyword(struct history* history) {
   } else if(S_EQ(token->sval, "continue")) {
     parse_continue(history);
     return;
+  } else if(S_EQ(token->sval, "goto")) {
+    parse_goto(history);
+    return;
+  } else if(S_EQ(token->sval, "case")) {
+    parse_case(history);
+    return;
   }
+
+  compiler_error(current_process, "Invalid Keyword\n");
 
 }
 
@@ -1323,6 +1380,25 @@ void parse_break(struct history* history) {
   expect_keyword("break");
   expect_sym(';');
   make_break_node();
+}
+
+void parse_goto(struct history* history) {
+  expect_keyword("goto");
+  parse_identifier(history_begin(0));
+  expect_sym(';');
+  struct node* label_node = node_pop();
+  make_goto_node(label_node);
+}
+
+void parse_label(struct history* history) {
+  expect_sym(':');
+
+  struct node* label_name_node = node_pop();
+  if(label_name_node->type != NODE_TYPE_IDENTIFIER) {
+    compiler_error(current_process, "expecting an identifier for labels. Something else was provided\n");
+  }
+
+  make_label_node(label_name_node);
 }
 
 int parse_expressionable_single(struct history* history) {

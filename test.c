@@ -1,5 +1,3 @@
-int main() {
-	while(1) {
-		break;
-	}
+int main(int x) {
+	x = 50, 30;
 }
