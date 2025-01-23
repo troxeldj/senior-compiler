@@ -185,3 +185,11 @@ bool is_parentheses_node(struct node* node) {
 bool is_access_node_with_op(struct node* node, const char* op) {
 	return is_access_node(node) && S_EQ(node->exp.op, op);
 }
+
+bool is_argument_operator(const char* op) {
+	return S_EQ(op, ",");
+}
+
+bool is_argument_node(struct node* node) {
+	return node->type == NODE_TYPE_EXPRESSION && is_argument_operator(node->exp.op);
+}

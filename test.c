@@ -1,4 +1,1 @@
-int test() {
-	int b;
-	b = 50;
-}
+const char* hello = "hello";
