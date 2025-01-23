@@ -5,6 +5,8 @@
 #include <assert.h>
 static struct compile_process* current_process = NULL;
 
+int codegen_label_count();
+
 void codegen_new_scope(int flags) {
 	#warning "the resolver needs to exist for this to work"
 }
@@ -62,6 +64,7 @@ const char* codegen_get_label_for_string(const char* str) {
 	}
 	return result;
 }
+
 
 const char* codegen_register_string(const char* str) {
 	const char* label = codegen_get_label_for_string(str);

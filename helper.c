@@ -73,3 +73,115 @@ int compute_sum_padding(struct vector* vec) {
 	return padding;
 }
 
+int array_multiplier(struct datatype* dtype, int index, int index_value) {
+	if(!(dtype->flags & DATATYPE_FLAG_IS_ARRAY)) {
+		return index_value;
+	}
+
+	vector_set_peek_pointer(dtype->array.brackets->n_brackets, index+1);
+	int size_sum = index_value;
+	struct node* bracket_node = vector_peek_ptr(dtype->array.brackets->n_brackets);	
+
+	while(bracket_node) {
+		// assert we have a number in between brackets
+		assert(bracket_node->bracket.inner->type == NODE_TYPE_NUMBER);
+		// grabs number from array brackets
+		int declared_index = bracket_node->bracket.inner->llnum;
+		int size_value = declared_index;
+		// multiply by the size_value (= declared_index)
+		size_sum *= size_value;
+		bracket_node = vector_peek_ptr(dtype->array.brackets->n_brackets);
+	}
+
+	return size_sum;
+}
+
+int array_offset(struct datatype* dtype, int index, int index_value) {
+	if(!(dtype->flags & DATATYPE_FLAG_IS_ARRAY) || (index == vector_count(dtype->array.brackets->n_brackets) - 1)) {
+		return index_value * datatype_element_size(dtype);
+	}
+	return array_multiplier(dtype, index, index_value) * datatype_element_size(dtype);
+}
+
+struct node* body_largest_variable_node(struct node* body_node) {
+	if(!body_node) {
+		return NULL;
+	}
+	if(body_node->type != NODE_TYPE_BODY) {
+		return NULL;
+	}
+	return body_node->body.largest_var_node;
+}
+
+struct node* variable_struct_or_union_largest_variable_node(struct node* var_node) {
+	return body_largest_variable_node(variable_struct_or_union_body_node(var_node));
+}
+
+int struct_offset(struct compile_process* compile_p, const char* struct_name, const char* var_name, struct node** var_node_out, int last_pos, int flags) {
+	struct symbol* struct_sym = symresolver_get_symbol(compile_p, struct_name);
+	assert(struct_sym && struct_sym->type == SYMBOL_TYPE_NODE);
+	struct node* node = struct_sym->data;
+	assert(node_is_struct_or_union(node));
+	
+
+	// node* vector of struct variables
+	struct vector* struct_vars_vec = node->_struct.body_n->body.statements;
+	vector_set_peek_pointer(struct_vars_vec, 0);
+	if(flags & STRUCT_ACCESS_BACKWARDS) {
+		vector_set_peek_pointer_end(struct_vars_vec);
+		vector_set_flag(struct_vars_vec, VECTOR_FLAG_PEEK_DECREMENT);
+	}
+
+	struct node* var_node_current = variable_node(vector_peek_ptr(struct_vars_vec));
+	struct node* var_node_last = NULL;
+	int position = last_pos;
+	*var_node_out = NULL;
+	while(var_node_current) {
+		*var_node_out = var_node_current;
+		if(var_node_last) {
+			position += variable_size(var_node_last);
+			if(variable_node_is_primitive(var_node_current)) {
+				position = align_value_treat_positive(position, var_node_current->var.type.size);
+			} else {
+				position = align_value_treat_positive(position, variable_struct_or_union_largest_variable_node(var_node_current)->var.type.size);
+			}
+		}
+		if(S_EQ(var_node_current->var.name, var_name)) {
+			// we found the correct variable
+			break;
+		}
+
+		var_node_last = var_node_current;
+		var_node_current = variable_node(vector_peek_ptr(struct_vars_vec));
+	}
+	vector_unset_flag(struct_vars_vec, VECTOR_FLAG_PEEK_DECREMENT);
+	return position;
+}
+
+bool is_access_operator(const char* op) {
+	return S_EQ(op, "->") || S_EQ(op, ".");
+}
+
+bool is_access_node(struct node* node) {
+	return node->type == NODE_TYPE_EXPRESSION && is_access_operator(node->exp.op);
+}
+
+bool is_array_operator(const char* op) {
+	return S_EQ(op, "[]");
+}
+
+bool is_array_node(struct node* node) {
+	return node->type == NODE_TYPE_EXPRESSION && is_array_operator(node->exp.op);
+}
+
+bool is_parentheses_operator(const char* op) {
+	return S_EQ(op, "()");
+}
+
+bool is_parentheses_node(struct node* node) {
+	return node->type == NODE_TYPE_EXPRESSION && is_parentheses_operator(node->exp.op);
+}
+
+bool is_access_node_with_op(struct node* node, const char* op) {
+	return is_access_node(node) && S_EQ(node->exp.op, op);
+}

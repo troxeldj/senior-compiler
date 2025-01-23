@@ -221,6 +221,10 @@ struct node* node_create(struct node* _node) {
   return node;
 }
 
+bool node_is_struct_or_union(struct node* node) {
+  return node->type == NODE_TYPE_STRUCT || node->type == NODE_TYPE_UNION;
+}
+
 bool node_is_struct_or_union_variable(struct node* node) {
   if (node->type != NODE_TYPE_VARIABLE) return false;
   return datatype_is_struct_or_union(&node->var.type);
@@ -277,10 +281,6 @@ bool node_is_value_type(struct node* node) {
 
 bool node_is_expression(struct node* node, const char* op) {
   return node->type == NODE_TYPE_EXPRESSION && S_EQ(node->exp.op, op);
-}
-
-bool is_array_node(struct node* node) {
-  return node_is_expression(node, "[]");
 }
 
 bool is_node_assignment(struct node* node) {
