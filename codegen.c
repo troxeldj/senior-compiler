@@ -35,8 +35,51 @@ void asm_push(const char* ins, ...) {
 	va_end(args);
 }
 
+void asm_push_no_nl(const char* ins, ...) {
+	va_list args;
+	va_start(args, ins);
+	vfprintf(stdout, ins, args);
+	va_end(args);
+	if(current_process->ofile) {
+		va_list args;
+		va_start(args, ins);
+		vfprintf(current_process->ofile, ins, args);
+		va_end(args);
+	}
+}
+
+const char* codegen_get_label_for_string(const char* str) {
+	const char* result = NULL;
+	struct code_generator* generator = current_process->generator;
+	vector_set_peek_pointer(generator->string_table, 0);
+	struct string_table_element* current = vector_peek_ptr(generator->string_table);
+	while(current) {
+		if(S_EQ(current->str, str)) {
+			result = current->label;
+			break;
+		}
+		current = vector_peek_ptr(generator->string_table);
+	}
+	return result;
+}
+
+const char* codegen_register_string(const char* str) {
+	const char* label = codegen_get_label_for_string(str);
+	if(label) {
+		// string already registered
+		return label;
+	}
+	struct string_table_element* element = calloc(1, sizeof(struct string_table_element));
+	element->str = str;
+	int label_id = codegen_label_count();
+	sprintf((char*)element->label, "str_%i", label_id);
+	vector_push(current_process->generator->string_table, &element);
+	return element->label;
+}
+
 struct code_generator* codegenerator_new(struct compile_process* process) {
 	struct code_generator* generator = calloc(1, sizeof(struct code_generator));
+	generator->string_table = vector_create(sizeof(struct string_table_element*));
 	generator->entry_points = vector_create(sizeof(struct codegen_entry_point*));
 	generator->exit_points = vector_create(sizeof(struct codegen_exit_point*));
 	return generator;
@@ -158,13 +201,15 @@ void codegen_generate_global_variable_for_primitive(struct node* node) {
 	char tmp_buf[256];
 	if(node->var.value != NULL) {
 		if(node->var.value->type == NODE_TYPE_STRING) {
-			#warning "Don't forget to handle string values"
+			const char* label = codegen_register_string(node->var.value->sval);
+			asm_push("%s: %s %s", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf), label);
 		} else {
-			#warning "Don't forget to handle non-string values"
+			asm_push("%s: %s %lld", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf), node->var.value->llnum);
 		}
+	} else {
+		asm_push("%s: %s 0", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf));
 	}
 
-	asm_push("%s: %s 0", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf));
 }
 
 void codegen_generate_global_variable(struct node* node) {
@@ -218,8 +263,46 @@ void codegen_generate_root() {
 	}
 }
 
+bool codegen_write_string_char_escaped(char c) {
+	const char* c_out = NULL;
+	switch(c) {
+		case '\n':
+			c_out = "10";
+		break;
+
+		case '\t':
+			c_out = "9";
+		break;
+	}
+	if(c_out) {
+		asm_push_no_nl("%s, ", c_out);
+	}
+	return c_out != NULL;
+}
+
+void codegen_write_string(struct string_table_element* element) {
+	asm_push_no_nl("%s: db ", element->label);
+	size_t s_len = strlen(element->str);
+	for(int i = 0; i < s_len; i++) {
+		char c = element->str[i];
+		bool handled = codegen_write_string_char_escaped(c);
+		if(handled) {
+			continue;
+		}
+		asm_push_no_nl("'%c', ", c);
+	}
+	asm_push_no_nl("0");
+	asm_push("");
+}
+
 void codegen_write_strings() {
-	#warning "loop through string table and write strings"
+	struct code_generator* generator = current_process->generator;
+	vector_set_peek_pointer(generator->string_table, 0);
+	struct string_table_element* element = vector_peek_ptr(generator->string_table);	
+	while(element) {
+		codegen_write_string(element);
+		element = vector_peek_ptr(generator->string_table);
+	}
 }
 
 void codegen_generate_rod() {
@@ -239,11 +322,9 @@ int codegen(struct compile_process* process) {
 	codegen_finish_scope();
 
 	// Generate read-only data
+
 	codegen_generate_rod();
 
-	codegen_begin_entry_exit_point();
-	codegen_goto_exit_point(NULL);
-	codegen_goto_entry_point(NULL);
-	codegen_end_entry_exit_point();
+
 	return 0;
 }

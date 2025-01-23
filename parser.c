@@ -1543,6 +1543,10 @@ void parse_label(struct history* history) {
   make_label_node(label_name_node);
 }
 
+void parse_string(struct history* history) {
+  parse_single_token_to_node();
+}
+
 int parse_expressionable_single(struct history* history) {
   struct token* token = token_peek_next();
   if (!token) return -1;
@@ -1556,6 +1560,11 @@ int parse_expressionable_single(struct history* history) {
 
     case TOKEN_TYPE_IDENTIFIER:
       parse_identifier(history);
+      res = 0;
+      break;
+
+    case TOKEN_TYPE_STRING:
+      parse_string(history);
       res = 0;
       break;
 

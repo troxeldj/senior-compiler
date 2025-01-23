@@ -170,7 +170,17 @@ struct codegen_exit_point {
   int id;
 };
 
+struct string_table_element {
+  // string that the element relates to
+  const char* str;
+  // assembly label that points to the memory for the string
+  const char label[50];
+};
+
 struct code_generator {
+  // vector of struct string_table_element*
+  struct vector* string_table;
+
   // vector of struct codegen_entry_point*
   struct vector* entry_points;
 
@@ -301,6 +311,49 @@ struct parsed_switch_case {
   int index;
 };
 
+struct stack_frame_data {
+  // datatype that was pushed
+  struct datatype* dtype;
+};
+
+struct stack_frame_element {
+  int flags;
+  // type of frame element
+  int type;
+  // name that describes the frame element
+  const char* name;
+
+  // offset from ebp
+  int offset_from_bp;
+
+  struct stack_frame_data data;
+};
+#define STACK_PUSH_SIZE 4
+enum {
+  STACK_FRAME_ELEMENT_TYPE_LOCAL_VARIABLE,
+  STACK_FRAME_ELEMENT_TYPE_SAVED_REGISTER,
+  STACK_FRAME_ELEMENT_TYPE_SAVED_BP,
+  STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+  STACK_FRAME_ELEMENT_TYPE_UNKNOWN
+};
+
+enum {
+  STACK_FRAME_ELEMENT_FLAG_IS_PUSHED_ADDRESS = 0b00000001,
+  STACK_FRAME_ELEMENT_FLAG_ELEMENT_NOT_FOUND = 0b00000010,
+  STACK_FRAME_ELEMENT_FLAG_IS_NUMERICAL = 0b00000100,
+  STACK_FRAME_ELEMENT_FLAG_HAS_DATATYPE = 0b00001000
+};
+void stackframe_pop(struct node* function_node);
+struct stack_frame_element* stackframe_back(struct node* function_node);
+void stackframe_pop_expecting(struct node* function_node, int expecting_type, const char* expecting_name);
+void stackframe_peek_start(struct node* function_node);
+struct stack_frame_element* stackframe_peek(struct node* function_node);
+struct stack_frame_element* stackframe_back_expect(struct node* function_node, int expected_type, const char* expected_name);
+void stackframe_push(struct node* function_node, struct stack_frame_element* element);
+void stackframe_sub(struct node* function_node, int type, const char* name, size_t amount);
+void stackframe_add(struct node* function_node, int type, const char* name, size_t amount);
+void stackframe_assert_empty(struct node* function_node);
+
 
 struct node {
   int type;
@@ -418,6 +471,11 @@ struct node {
 
       // stack size for all variables in functions
       size_t stack_size;
+
+      struct stack_frame {
+        // vector of stack_frame_element
+        struct vector* elements;
+      } frame;
     } func;
 
     struct statement {
