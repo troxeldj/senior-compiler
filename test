@@ -1,0 +1,13 @@
+section .data
+; int x
+x: dd 0
+; int y
+y: dd 0
+; char e
+e: db 0
+section .text
+section .rodata
+.entry_point_1:
+jmp .exit_point_2
+jmp .entry_point_1
+.exit_point_2:

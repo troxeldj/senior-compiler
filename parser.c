@@ -1621,5 +1621,6 @@ int parse(struct compile_process* process) {
     vector_push(process->node_tree_vec, &node);
   }
   assert(fixups_resolve(parser_fixup_sys) == 0);
+  scope_free_root(process);
   return PARSE_ALL_OK;
 }
