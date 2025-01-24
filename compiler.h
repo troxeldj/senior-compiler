@@ -354,6 +354,19 @@ void stackframe_sub(struct node* function_node, int type, const char* name, size
 void stackframe_add(struct node* function_node, int type, const char* name, size_t amount);
 void stackframe_assert_empty(struct node* function_node);
 
+struct node;
+
+struct unary {
+  // operator of the unary
+  const char* op;
+  struct node* operand;
+  union {
+    struct indirection {
+      // pointer depth
+      int depth;
+    } indirection;
+  };
+};
 
 struct node {
   int type;
@@ -540,6 +553,8 @@ struct node {
       struct datatype dtype;
       struct node* operand;
     } cast;
+
+    struct unary unary;
   };
 
   union {
@@ -870,6 +885,7 @@ void make_continue_node();
 void make_break_node();
 void make_goto_node(struct node* label_node);
 void make_exp_node(struct node* left_node, struct node* right_node, const char* op);
+void make_unary_node(const char* op, struct node* operand_node);
 void make_exp_parentheses_node(struct node* exp_node);
 void make_bracket_node(struct node* node);
 void make_body_node(struct vector* body_vec, size_t size, bool padded, struct node* largest_var_node);
@@ -894,12 +910,16 @@ bool is_access_operator(const char* op);
 bool is_access_node(struct node* node);
 bool is_array_operator(const char* op);
 bool is_array_node(struct node* node);
+bool op_is_indirection(const char* op);
 bool is_parentheses_operator(const char* op);
 bool is_parentheses_node(struct node* node);
 bool is_access_node_with_op(struct node* node, const char* op);
 bool is_argument_operator(const char* op);
 bool is_argument_node(struct node* node);
+void datatype_decrement_pointer(struct datatype* dtype);
 bool node_valid(struct node* node);
+bool is_unary_operator(const char* op);
+size_t array_brackets_count(struct datatype* dtype);
 
 bool node_is_expressionable(struct node* node);
 bool node_is_expression_or_parentheses(struct node* node);

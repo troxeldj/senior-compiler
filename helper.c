@@ -193,3 +193,18 @@ bool is_argument_operator(const char* op) {
 bool is_argument_node(struct node* node) {
 	return node->type == NODE_TYPE_EXPRESSION && is_argument_operator(node->exp.op);
 }
+
+void datatype_decrement_pointer(struct datatype* dtype) {
+	dtype->pointer_depth--;
+	if(dtype->pointer_depth <= 0) {
+		dtype->flags &= ~DATATYPE_FLAG_IS_POINTER;
+	}
+}
+
+bool is_unary_operator(const char* op) {
+	return S_EQ(op, "-") || S_EQ(op, "!") || S_EQ(op, "~") || S_EQ(op, "*") || S_EQ(op, "&");
+}
+
+bool op_is_indirection(const char* op) {
+	return S_EQ(op, "*");
+}
