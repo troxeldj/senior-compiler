@@ -752,7 +752,7 @@ struct resolver_entity {
   struct resolver_result* result;
   
   // the resolver process
-  struct resolver_process* process;
+  struct resolver_process* resolver;
 
   // private data only entity creator understands
   void* private;
@@ -911,6 +911,7 @@ bool is_access_node(struct node* node);
 bool is_array_operator(const char* op);
 bool is_array_node(struct node* node);
 bool op_is_indirection(const char* op);
+bool op_is_address(const char* op);
 bool is_parentheses_operator(const char* op);
 bool is_parentheses_node(struct node* node);
 bool is_access_node_with_op(struct node* node, const char* op);

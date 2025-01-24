@@ -5,6 +5,7 @@ void resolver_follow_part(struct resolver_process* resolver, struct node* node, 
 struct resolver_entity* resolver_follow_exp(struct resolver_process* resolver, struct node* node, struct resolver_result* result);
 struct resolver_result* resolver_follow(struct resolver_process* resolver, struct node* node);
 struct datatype* resolver_get_datatype(struct resolver_process* resolver, struct node* node);
+struct resolver_entity* resolver_follow_part_return_entity(struct resolver_process* resolver, struct node* node, struct resolver_result* result);
 
 bool resolver_result_failed(struct resolver_result* result) {
 	return result->flags & RESOLVER_RESULT_FLAG_FAILED;
@@ -595,6 +596,71 @@ struct resolver_entity* resolver_follow_array_bracket(struct resolver_process* r
 	return array_bracket_entity;
 }
 
+struct resolver_entity* resolver_follow_exp_parentheses(struct resolver_process* resolver, struct node* node, struct resolver_result* result) {
+	return resolver_follow_part_return_entity(resolver, node->parentheses.exp, result);
+}
+
+struct resolver_entity* resolver_follow_unsupported_unary_node(struct resolver_process* resolver, struct node* node, struct resolver_result* result) {
+	return resolver_follow_part_return_entity(resolver, node->unary.operand, result);
+}
+
+struct resolver_entity* resolver_follow_unsupported_node(struct resolver_process* resolver, struct node* node, struct resolver_result* result) {
+	bool followed = false;
+	switch(node->type) {
+		case NODE_TYPE_UNARY:
+			resolver_follow_unsupported_unary_node(resolver, node, result);
+			followed = true;
+		break;
+
+		default:
+			followed = false;
+		break;
+	}
+	struct resolver_entity* unsupported_entity = resolver_create_new_entity_for_unsupported_nodes(result, node);
+	assert(unsupported_entity);
+	resolver_result_entity_push(result, unsupported_entity);
+	return unsupported_entity;
+}
+
+struct resolver_entity* resolver_follow_cast(struct resolver_process* resolver, struct node* node, struct resolver_result* result) {
+	struct resolver_entity* operand_entity = NULL;
+	resolver_follow_unsupported_node(resolver, node->cast.operand, result);
+	operand_entity = resolver_result_peek(result);
+	operand_entity->flags |= RESOLVER_ENTITY_FLAG_WAS_CASTED;
+	struct resolver_entity* cast_entity = resolver_create_new_cast_entity(resolver, operand_entity->scope, &node->cast.dtype);
+	resolver_result_entity_push(result, cast_entity);
+	return cast_entity;
+}
+
+struct resolver_entity* resolver_follow_indirection(struct resolver_process* resolver, struct node* node, struct resolver_result* result) {
+	resolver_follow_part(resolver, node->unary.operand, result);
+	struct resolver_entity* last_entity = resolver_result_peek(result);
+	if(!last_entity) {
+		last_entity = resolver_follow_unsupported_node(resolver, node->unary.operand, result);
+	}
+	struct resolver_entity* indirection_entity = resolver_create_new_unary_indirection_entity(resolver, result, node, node->unary.indirection.depth);
+	resolver_result_entity_push(result, indirection_entity);
+	return indirection_entity;
+}
+
+struct resolver_entity* resolver_follow_unary_address(struct resolver_process* resolver, struct node* node, struct resolver_result* result) {
+	resolver_follow_part(resolver, node->unary.operand, result);
+	struct resolver_entity* last_entity = resolver_result_peek(result);
+	struct resolver_entity* unary_address_entity = resolver_create_new_unary_get_address_entity(resolver, result, &last_entity->dtype, node, last_entity->scope, last_entity->offset);
+	resolver_result_entity_push(result, unary_address_entity);
+	return unary_address_entity;
+}
+
+struct resolver_entity* resolver_follow_unary(struct resolver_process* resolver, struct node* node, struct resolver_result* result) {
+	struct resolver_entity* result_entity = NULL;
+	if(op_is_indirection(node->unary.op)) {
+		result_entity = resolver_follow_indirection(resolver, node, result);
+	} else if (op_is_address(node->unary.op)) {
+		result_entity = resolver_follow_unary_address(resolver, node, result);
+	}
+	return result_entity;
+}
+
 struct resolver_entity* resolver_follow_part_return_entity(struct resolver_process* resolver, struct node* node, struct resolver_result* result) {
 	struct resolver_entity* entity = NULL;
 	switch(node->type) {
@@ -613,19 +679,119 @@ struct resolver_entity* resolver_follow_part_return_entity(struct resolver_proce
 		case NODE_TYPE_BRACKET:
 			entity = resolver_follow_array_bracket(resolver, node, result);
 		break;
+
+		case NODE_TYPE_EXPRESSION_PARENTHESIS:
+			entity = resolver_follow_exp_parentheses(resolver, node, result);
+		break;
+
+		case NODE_TYPE_CAST:
+			entity = resolver_follow_cast(resolver, node, result);
+		break;
+
+		case NODE_TYPE_UNARY:
+			entity = resolver_follow_unary(resolver, node, result);
+		break;
+
+		default:
+			entity = resolver_follow_unsupported_node(resolver, node, result);
+		break;
 	}
+
+	if(entity) {
+		entity->result = result;
+		entity->resolver = resolver;
+	}
+	return entity;
 }
 
 void resolver_follow_part(struct resolver_process* resolver, struct node* node, struct resolver_result* result) {
 	resolver_follow_part_return_entity(resolver, node, result);
 }
+void resolver_rule_apply_rules(struct resolver_entity* rule_entity, struct resolver_entity* left_entity, struct resolver_entity* right_entity) {
+	assert(rule_entity->type == RESOLVER_ENTITY_TYPE_RULE);
+	if(left_entity) {
+		left_entity->flags |= rule_entity->rule.left.flags;
+	}
+	if(right_entity) {
+		right_entity->flags |= rule_entity->rule.right.flags;
+	}
+}
+
+void resolver_push_vector_of_entities(struct resolver_result* result, struct vector* entities) {
+	vector_set_peek_pointer_end(entities);
+	vector_set_flag(entities, VECTOR_FLAG_PEEK_DECREMENT);
+	struct resolver_entity* entity = vector_peek_ptr(entities);
+	while(entity) {
+		resolver_result_entity_push(result, entity);
+		entity = vector_peek_ptr(entities);
+	}
+}
 
 void resolver_execute_rules(struct resolver_process* resolver, struct resolver_result* result) {
+	struct vector* saved_entites = vector_create(sizeof(struct resolver_entity*));
+	struct resolver_entity* entity = resolver_result_pop(result);
+	struct resolver_entity* last_processed_entity = NULL;
+	while(entity) {
+		if(entity->type == RESOLVER_ENTITY_TYPE_RULE) {
+			struct resolver_entity* left_entity = resolver_result_pop(result);
+			resolver_rule_apply_rules(entity, left_entity, last_processed_entity);
+			entity = left_entity;
+		}
+		vector_push(saved_entites, &entity);
+		last_processed_entity = entity;
+		entity = resolver_result_pop(result);
+	}
+	resolver_push_vector_of_entities(result, saved_entites);
+}
 
+struct resolver_entity* resolver_merge_compile_time_result(struct resolver_process* resolver, struct resolver_result* result, struct resolver_entity* left_entity, struct resolver_entity* right_entity) {
+	if(left_entity && right_entity)	{
+		if(left_entity->flags & RESOLVER_ENTITY_FLAG_NO_MERGE_WITH_NEXT_ENTITY || 
+			 right_entity->flags & RESOLVER_ENTITY_FLAG_NO_MERGE_WITH_LEFT_ENTITY) {
+				goto no_merge_possible;
+		}
+
+		struct resolver_entity* result_entity = resolver->callbacks.merge_entities(resolver, result, left_entity, right_entity);
+		if(!result_entity) {
+			goto no_merge_possible;
+		}
+		return result_entity;
+	}
+	no_merge_possible:
+		return NULL;
+}
+
+void _resolver_merge_compile_times(struct resolver_process* resolver, struct resolver_result* result) {
+	struct vector* saved_entities = vector_create(sizeof(struct resolver_entity*));
+	while(1) {
+		struct resolver_entity* right_entity = resolver_result_pop(result);
+		struct resolver_entity* left_entity = resolver_result_pop(result);
+		if(!right_entity) {
+			break;
+		}
+		if(!left_entity) {
+			resolver_result_entity_push(result, right_entity);
+			break;
+		}
+		struct resolver_entity* merged_entity = resolver_merge_compile_time_result(resolver, result, left_entity, right_entity);
+		if(merged_entity) {
+			resolver_result_entity_push(result, merged_entity);
+			continue;
+		}
+		right_entity->flags |= RESOLVER_ENTITY_FLAG_NO_MERGE_WITH_LEFT_ENTITY;
+		vector_push(saved_entities, right_entity);
+		resolver_result_entity_push(result, left_entity);
+	}
+	resolver_push_vector_of_entities(result, saved_entities);
+	vector_free(saved_entities);
 }
 
 void resolver_merge_compile_times(struct resolver_process* resolver, struct resolver_result* result) {
-
+	size_t total_entities = 0;
+	do {
+		total_entities = result->count;
+		_resolver_merge_compile_times(resolver, result);
+	} while(total_entities != 1 && total_entities != result->count);
 }
 
 void resolver_finalize_result(struct resolver_process* resolver, struct resolver_result* result) {
