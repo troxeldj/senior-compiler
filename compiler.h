@@ -13,6 +13,11 @@ struct pos {
   const char* fileName;
 };
 
+// stack alignment = 16 bytes in c
+#define C_STACK_ALIGNMENT 16
+#define STACK_PUSH_SIZE 4
+#define C_ALIGN(size) (size % C_STACK_ALIGNMENT) ? size + C_STACK_ALIGNMENT - (size % C_STACK_ALIGNMENT) : size
+
 #define NUMERIC_CASE \
   case '0':         \
   case '1':         \
@@ -188,6 +193,8 @@ struct code_generator {
   struct vector* exit_points;
 };
 
+struct resolver_process;
+
 struct compile_process {
   // flags in regards to how this file should be compiled
   int flags;
@@ -219,6 +226,7 @@ struct compile_process {
   } symbols;
 
   struct code_generator* generator;
+  struct resolver_process* resolver;
 };
 
 enum {
@@ -635,6 +643,38 @@ struct resolver_process {
 };
 
 enum {
+  RESOLVER_DEFAULT_ENTITY_TYPE_STACK,
+  RESOLVER_DEFAULT_ENTITY_TYPE_SYMBOL
+};
+
+enum {
+  RESOLVER_DEFAULT_ENTITY_FLAG_IS_LOCAL_STACK = 0b00000001
+};
+
+enum {
+  RESOLVER_DEFAULT_ENTITY_DATA_TYPE_VARAIBLE,
+  RESOLVER_DEFAULT_ENTITY_DATA_TYPE_FUNCTION,
+  RESOLVER_DEFAULT_ENTITY_DATA_TYPE_ARRAY_BRACKET,
+};
+
+struct resolver_default_entity_data {
+  // type of data. i.e function,struct, var
+  int type;
+  // The address. i.e [ebp-4]
+  char address[60];
+  // ebp, var_name
+  char base_address[60];
+  // -4 for example
+  int offset;
+  // flags relating to entity data
+  int flags;
+};
+
+struct resolver_default_scope_data {
+  int flags;
+};
+
+enum {
   RESOLVER_RESULT_FLAG_FAILED = 0b00000001,
   RESOLVER_RESULT_FLAG_RUNTIME_NEEDED_TO_FINISH_PATH = 0b00000010,
   RESOLVER_RESULT_FLAG_PROCESSING_ARRAY_ENTITIES = 0b00000100,
@@ -806,6 +846,10 @@ enum {
 };
 
 enum {
+  IS_ALONE_STATEMENT = 0b00000001
+};
+
+enum {
   STRUCT_ACCESS_BACKWARDS = 0b00000001,
   STRUCT_STOP_AT_POINTER_ACCESS = 0b00000010
 };
@@ -848,6 +892,7 @@ bool keyword_is_datatype(const char* str);
 bool token_is_primitive_keyword(struct token* token);
 bool datatype_is_struct_or_union_for_name(const char* name);
 bool datatype_is_struct_or_union(struct datatype* dtype);
+bool datatype_is_struct_or_union_non_pointer(struct datatype* dtype);
 size_t datatype_element_size(struct datatype* dtype);
 size_t datatype_size_for_array_access(struct datatype* dtype);
 size_t datatype_size_no_ptr(struct datatype* dtype);
@@ -965,6 +1010,9 @@ void symresolver_end_table(struct compile_process* process);
 struct symbol* symresolver_get_symbol_for_native_function(struct compile_process* process, const char* name);
 
 size_t function_node_argument_stack_addition(struct node* node);
+bool function_node_is_prototype(struct node* node);
+size_t function_node_stack_size(struct node* node);
+struct vector* function_node_argument_vec(struct node* node);
 
 struct node* node_from_sym(struct symbol* sym);
 struct node* node_from_symbol(struct compile_process* current_process, const char* name);
@@ -1025,4 +1073,26 @@ struct fixup* fixup_register(struct fixup_system* system, struct fixup_config* c
 bool fixup_resolve(struct fixup* fixup);
 void* fixup_private(struct fixup* fixup);
 bool fixups_resolve(struct fixup_system* system);
+
+struct resolver_default_entity_data* resolver_default_entity_private(struct resolver_entity* entity);
+struct resolver_default_scope_data* resolver_default_scope_private(struct resolver_scope* scope);
+char* resolver_default_stack_asm_address(int stack_offset, char* out);
+struct resolver_default_entity_data* resolver_default_new_entity_data();
+void resolver_default_global_asm_address(const char* name, int offset, char* address_out);
+void resolver_default_entity_data_set_address(struct resolver_default_entity_data* entity_data, struct node* var_node, int offset, int flags);
+void* resolver_default_make_private(struct resolver_entity* entity, struct node* node, int offset, struct resolver_scope* scope);
+void resolver_default_set_result_base(struct resolver_result* result, struct resolver_entity* base_entity);
+struct resolver_default_entity_data* resolver_default_new_entity_data_for_var_node(struct node* var_node, int offset, int flags);
+struct resolver_default_entity_data* resolver_default_new_entity_data_for_array_bracket(struct node* bracket_node);
+struct resolver_default_entity_data* resolver_default_new_entity_data_for_function(struct node* func_node, int flags);
+struct resolver_entity* resolver_default_new_scope_entity(struct resolver_process* resolver, struct node* var_node, int offset, int flags);
+struct resolver_entity* resolver_default_register_function(struct resolver_process* resolver, struct node* func_node, int flags);
+void resolver_default_new_scope(struct resolver_process* resolver, int flags);
+void resolver_default_finish_scope(struct resolver_process* resolver);
+void* resolver_default_new_array_entity(struct resolver_result* result, struct node* array_entity_node);
+void resolver_default_delete_entity(struct resolver_entity* entity);
+void resolver_default_delete_scope(struct resolver_scope* scope);
+struct resolver_entity* resolver_default_merge_entities(struct resolver_process* resolver, struct resolver_result* result, struct resolver_entity* left_entity, struct resolver_entity* right_entity);
+struct resolver_process* resolver_default_new_process(struct compile_process* compiler);
+void resolver_finish_scope(struct resolver_process* resolver);
 #endif

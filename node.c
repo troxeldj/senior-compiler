@@ -267,6 +267,21 @@ struct node* variable_node_or_list(struct node* node) {
   return variable_node(node);
 }
 
+size_t function_node_stack_size(struct node* node) {
+  assert(node->type == NODE_TYPE_FUNCTION);
+  return node->func.stack_size; 
+}
+
+bool function_node_is_prototype(struct node* node) {
+  return node->func.body_n == NULL;
+}
+
+struct vector* function_node_argument_vec(struct node* node) {
+  assert(node->type == NODE_TYPE_FUNCTION);
+  return node->func.args.vector;
+}
+
+
 size_t function_node_argument_stack_addition(struct node* node) {
   assert(node->type == NODE_TYPE_FUNCTION);
   return node->func.args.stack_addition;
