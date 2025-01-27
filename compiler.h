@@ -321,7 +321,7 @@ struct parsed_switch_case {
 
 struct stack_frame_data {
   // datatype that was pushed
-  struct datatype* dtype;
+  struct datatype dtype;
 };
 
 struct stack_frame_element {
@@ -845,8 +845,40 @@ enum {
   DATA_SIZE_DDWORD = 8
 };
 
-enum {
-  IS_ALONE_STATEMENT = 0b00000001
+enum
+{
+    EXPRESSION_FLAG_RIGHT_NODE = 0b0000000000000001,
+    EXPRESSION_IN_FUNCTION_CALL_ARGUMENTS = 0b0000000000000010,
+    EXPRESSION_IN_FUNCTION_CALL_LEFT_OPERAND = 0b0000000000000100,
+    EXPRESSION_IS_ADDITION = 0b0000000000001000,
+    EXPRESSION_IS_SUBTRACTION = 0b0000000000010000,
+    EXPRESSION_IS_MULTIPLICATION = 0b0000000000100000,
+    EXPRESSION_IS_DIVISION = 0b0000000001000000,
+    EXPRESSION_IS_FUNCTION_CALL = 0b0000000010000000,
+    EXPRESSION_INDIRECTION = 0b0000000100000000,
+    EXPRESSION_GET_ADDRESS = 0b0000001000000000,
+    EXPRESSION_IS_ABOVE = 0b0000010000000000,
+    EXPRESSION_IS_ABOVE_OR_EQUAL = 0b0000100000000000,
+    EXPRESSION_IS_BELOW = 0b0001000000000000,
+    EXPRESSION_IS_BELOW_OR_EQUAL = 0b0010000000000000,
+    EXPRESSION_IS_EQUAL = 0b0100000000000000,
+    EXPRESSION_IS_NOT_EQUAL = 0b1000000000000000,
+    EXPRESSION_LOGICAL_AND = 0b10000000000000000,
+    EXPRESSION_LOGICAL_OR = 0b100000000000000000,
+    EXPRESSION_IN_LOGICAL_EXPRESSION = 0b1000000000000000000,
+    EXPRESSION_IS_BITSHIFT_LEFT = 0b10000000000000000000,
+    EXPRESSION_IS_BITSHIFT_RIGHT = 0b100000000000000000000,
+    EXPRESSION_IS_BITWISE_OR = 0b1000000000000000000000,
+    EXPRESSION_IS_BITWISE_AND = 0b10000000000000000000000,
+    EXPRESSION_IS_BITWISE_XOR = 0b100000000000000000000000,
+    EXPRESSION_IS_NOT_ROOT_NODE = 0b1000000000000000000000000,
+    EXPRESSION_IS_ASSIGNMENT = 0b10000000000000000000000000,
+    IS_ALONE_STATEMENT = 0b100000000000000000000000000,
+    EXPRESSION_IS_UNARY = 0b1000000000000000000000000000,
+    IS_STATEMENT_RETURN = 0b10000000000000000000000000000,
+    IS_RIGHT_OPERAND_OF_ASSIGNMENT = 0b100000000000000000000000000000,
+    IS_LEFT_OPERAND_OF_ASSIGNMENT = 0b1000000000000000000000000000000,
+    EXPRESSION_IS_MODULAS = 0b10000000000000000000000000000000,
 };
 
 enum {
@@ -893,6 +925,8 @@ bool token_is_primitive_keyword(struct token* token);
 bool datatype_is_struct_or_union_for_name(const char* name);
 bool datatype_is_struct_or_union(struct datatype* dtype);
 bool datatype_is_struct_or_union_non_pointer(struct datatype* dtype);
+struct datatype datatype_for_numeric();
+
 size_t datatype_element_size(struct datatype* dtype);
 size_t datatype_size_for_array_access(struct datatype* dtype);
 size_t datatype_size_no_ptr(struct datatype* dtype);
@@ -1087,7 +1121,12 @@ struct resolver_default_entity_data* resolver_default_new_entity_data_for_array_
 struct resolver_default_entity_data* resolver_default_new_entity_data_for_function(struct node* func_node, int flags);
 struct resolver_entity* resolver_default_new_scope_entity(struct resolver_process* resolver, struct node* var_node, int offset, int flags);
 struct resolver_entity* resolver_default_register_function(struct resolver_process* resolver, struct node* func_node, int flags);
+struct resolver_process* resolver_new_process(struct compile_process* compiler, struct resolver_callbacks* callbacks);
+struct resolver_entity* resolver_make_entity(struct resolver_process* process, struct resolver_result* result, struct datatype* custom_dtype, struct node* node, struct resolver_entity* guided_entity, struct resolver_scope* scope);
 void resolver_default_new_scope(struct resolver_process* resolver, int flags);
+struct resolver_entity* resolver_register_function(struct resolver_process* process, struct node* function_node, void* private);
+struct resolver_scope* resolver_new_scope(struct resolver_process* resolver, void* private, int flags);
+struct resolver_entity* resolver_create_new_entity_for_var_node(struct resolver_process* process, struct node* var_node, void* private, int offset);
 void resolver_default_finish_scope(struct resolver_process* resolver);
 void* resolver_default_new_array_entity(struct resolver_result* result, struct node* array_entity_node);
 void resolver_default_delete_entity(struct resolver_entity* entity);
