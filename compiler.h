@@ -1133,5 +1133,10 @@ void resolver_default_delete_entity(struct resolver_entity* entity);
 void resolver_default_delete_scope(struct resolver_scope* scope);
 struct resolver_entity* resolver_default_merge_entities(struct resolver_process* resolver, struct resolver_result* result, struct resolver_entity* left_entity, struct resolver_entity* right_entity);
 struct resolver_process* resolver_default_new_process(struct compile_process* compiler);
+struct resolver_result* resolver_follow(struct resolver_process* resolver, struct node* node);
+bool resolver_result_ok(struct resolver_result* result);
 void resolver_finish_scope(struct resolver_process* resolver);
+struct resolver_entity* resolver_result_entity_root(struct resolver_result* result);
+struct resolver_entity* resolver_result_entity_next(struct resolver_entity* entity);
+struct resolver_entity* resolver_new_entity_for_var_node(struct resolver_process* process, struct node* var_node, void* private, int offset);
 #endif
