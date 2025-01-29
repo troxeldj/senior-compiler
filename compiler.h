@@ -1,11 +1,10 @@
 #ifndef DRAGONCOMPILER_H
 #define DRAGONCOMPILER_H
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 
-#define S_EQ(str, str2) \
-  (str && str2 && (strcmp(str, str2) == 0))
+#define S_EQ(str, str2) (str && str2 && (strcmp(str, str2) == 0))
 
 struct pos {
   int line;
@@ -16,49 +15,51 @@ struct pos {
 // stack alignment = 16 bytes in c
 #define C_STACK_ALIGNMENT 16
 #define STACK_PUSH_SIZE 4
-#define C_ALIGN(size) (size % C_STACK_ALIGNMENT) ? size + C_STACK_ALIGNMENT - (size % C_STACK_ALIGNMENT) : size
+#define C_ALIGN(size)                                         \
+  (size % C_STACK_ALIGNMENT)                                  \
+      ? size + C_STACK_ALIGNMENT - (size % C_STACK_ALIGNMENT) \
+      : size
 
 #define NUMERIC_CASE \
-  case '0':         \
-  case '1':         \
-  case '2':         \
-  case '3':         \
-  case '4':         \
-  case '5':         \
-  case '6':         \
-  case '7':         \
-  case '8':         \
+  case '0':          \
+  case '1':          \
+  case '2':          \
+  case '3':          \
+  case '4':          \
+  case '5':          \
+  case '6':          \
+  case '7':          \
+  case '8':          \
   case '9'
 
 #define OPERATOR_CASE_EXCLUDING_DIVISION \
-  case '+':                           \
-  case '-':                           \
-  case '*':                           \
-  case '>':                           \
-  case '<':                           \
-  case '^':                           \
-  case '%':                           \
-  case '!':                           \
-  case '~':                           \
-  case '=':                           \
-  case '|':                           \
-  case '&':                           \
-  case '(':                           \
-  case '[':                           \
-  case ',':                           \
-  case '.':                           \
+  case '+':                              \
+  case '-':                              \
+  case '*':                              \
+  case '>':                              \
+  case '<':                              \
+  case '^':                              \
+  case '%':                              \
+  case '!':                              \
+  case '~':                              \
+  case '=':                              \
+  case '|':                              \
+  case '&':                              \
+  case '(':                              \
+  case '[':                              \
+  case ',':                              \
+  case '.':                              \
   case '?'
 
 #define SYMBOL_CASE \
-  case '{':       \
-  case '}':       \
-  case ':':       \
-  case ';':        \
-  case '#':        \
+  case '{':         \
+  case '}':         \
+  case ':':         \
+  case ';':         \
+  case '#':         \
   case '\\':        \
-  case ')':        \
+  case ')':         \
   case ']'
-
 
 enum {
   TOKEN_TYPE_IDENTIFIER,
@@ -71,10 +72,7 @@ enum {
   TOKEN_TYPE_NEWLINE
 };
 
-enum {
-  LEXICAL_ANALYSIS_ALL_OK,
-  LEXICAL_ANALYSIS_INPUT_ERROR
-};
+enum { LEXICAL_ANALYSIS_ALL_OK, LEXICAL_ANALYSIS_INPUT_ERROR };
 
 enum {
   NUMBER_TYPE_NORMAL,
@@ -105,7 +103,6 @@ struct token {
   // * a for operator token * would mean whitespace would be set for token "a"
   bool whitespace;
   const char* between_brackets;
-
 };
 
 enum {
@@ -114,9 +111,9 @@ enum {
 };
 
 struct lex_process;
-typedef char (* LEX_PROCESS_NEXT_CHAR)(struct lex_process* lex_process);
-typedef char (* LEX_PROCESS_PEEK_CHAR)(struct lex_process* lex_process);
-typedef void (* LEX_PROCESS_PUSH_CHAR)(struct lex_process* lex_process, char c);
+typedef char (*LEX_PROCESS_NEXT_CHAR)(struct lex_process* lex_process);
+typedef char (*LEX_PROCESS_PEEK_CHAR)(struct lex_process* lex_process);
+typedef void (*LEX_PROCESS_PUSH_CHAR)(struct lex_process* lex_process, char c);
 struct lex_process_functions {
   LEX_PROCESS_NEXT_CHAR next_char;
   LEX_PROCESS_PEEK_CHAR peek_char;
@@ -129,9 +126,9 @@ struct lex_process {
   struct compile_process* compiler;
 
   /*
-  * How many brackets there are
-  * ((50)) = count of 2
-  */
+   * How many brackets there are
+   * ((50)) = count of 2
+   */
   int current_expression_count;
   struct buffer* parenthesis_buffer;
   struct lex_process_functions* function;
@@ -140,24 +137,25 @@ struct lex_process {
   void* private;
 };
 
-struct scope {
-	int flags;
-
-	// entities: void*
-	struct vector* entities;
-
-	// total number of bytes this scope uses. Aligns to 16 bytes.
-	size_t size;
-
-	// null if no parent scope.
-	struct scope* parent;	
-};
-
 enum {
-  SYMBOL_TYPE_NODE,
-  SYMBOL_TYPE_NATIVE_FUNCTION,
-  SYMBOL_TYPE_UNKNOWN
+  COMPILE_PROCESS_EXECUTE_NASM = 0b00000001,
+  COMPILE_PROCESS_EXPORT_AS_OBJECT = 0b00000010,
 };
+
+struct scope {
+  int flags;
+
+  // entities: void*
+  struct vector* entities;
+
+  // total number of bytes this scope uses. Aligns to 16 bytes.
+  size_t size;
+
+  // null if no parent scope.
+  struct scope* parent;
+};
+
+enum { SYMBOL_TYPE_NODE, SYMBOL_TYPE_NATIVE_FUNCTION, SYMBOL_TYPE_UNKNOWN };
 
 struct symbol {
   const char* name;
@@ -168,7 +166,7 @@ struct symbol {
 struct codegen_entry_point {
   // id of the entry point
   int id;
-};  
+};
 
 struct codegen_exit_point {
   // id of the exit point
@@ -191,6 +189,9 @@ struct code_generator {
 
   // vector of struct codegen_exit_point*
   struct vector* exit_points;
+
+  // vector of struct response*
+  struct vector* responses;
 };
 
 struct resolver_process;
@@ -218,9 +219,9 @@ struct compile_process {
 
   struct {
     // current active symbol table
-    // struct symbol* 
+    // struct symbol*
     struct vector* table;
-    
+
     // struct vector* - multiple symbol tables
     struct vector* tables;
   } symbols;
@@ -229,15 +230,9 @@ struct compile_process {
   struct resolver_process* resolver;
 };
 
-enum {
-  PARSE_ALL_OK,
-  PARSE_GENERAL_ERROR
-};
+enum { PARSE_ALL_OK, PARSE_GENERAL_ERROR };
 
-enum {
-  CODEGEN_ALL_OK,
-  CODEGEN_GENERAL_ERROR
-};
+enum { CODEGEN_ALL_OK, CODEGEN_GENERAL_ERROR };
 
 enum {
   NODE_TYPE_EXPRESSION,
@@ -353,13 +348,19 @@ enum {
 };
 void stackframe_pop(struct node* function_node);
 struct stack_frame_element* stackframe_back(struct node* function_node);
-void stackframe_pop_expecting(struct node* function_node, int expecting_type, const char* expecting_name);
+void stackframe_pop_expecting(struct node* function_node, int expecting_type,
+                              const char* expecting_name);
 void stackframe_peek_start(struct node* function_node);
 struct stack_frame_element* stackframe_peek(struct node* function_node);
-struct stack_frame_element* stackframe_back_expect(struct node* function_node, int expected_type, const char* expected_name);
-void stackframe_push(struct node* function_node, struct stack_frame_element* element);
-void stackframe_sub(struct node* function_node, int type, const char* name, size_t amount);
-void stackframe_add(struct node* function_node, int type, const char* name, size_t amount);
+struct stack_frame_element* stackframe_back_expect(struct node* function_node,
+                                                   int expected_type,
+                                                   const char* expected_name);
+void stackframe_push(struct node* function_node,
+                     struct stack_frame_element* element);
+void stackframe_sub(struct node* function_node, int type, const char* name,
+                    size_t amount);
+void stackframe_add(struct node* function_node, int type, const char* name,
+                    size_t amount);
 void stackframe_assert_empty(struct node* function_node);
 
 struct node;
@@ -432,7 +433,7 @@ struct node {
       /*
       Example: for
         struct abc {
-        } var_name; 
+        } var_name;
       var would be "var_name"
       NULL otherwise
       */
@@ -445,7 +446,7 @@ struct node {
       /*
       Example: for
         struct abc {
-        } var_name; 
+        } var_name;
       var would be "var_name"
       NULL otherwise
       */
@@ -454,7 +455,7 @@ struct node {
 
     struct body {
       /* struct node* vector of statements
-      */
+       */
       struct vector* statements;
 
       // The size of all the variables in the body
@@ -462,7 +463,6 @@ struct node {
 
       // true if the variable size had to be increased due to padding
       bool padded;
-
 
       // pointer to largest variable node in the statement vector
       struct node* largest_var_node;
@@ -524,7 +524,7 @@ struct node {
       } for_stmt;
 
       struct else_stmt {
-       struct node* body_node; 
+        struct node* body_node;
       } else_stmt;
 
       struct while_stmt {
@@ -600,9 +600,7 @@ enum {
   RESOLVER_ENTITY_TYPE_CAST,
 };
 
-enum {
-  RESOLVER_SCOPE_FLAG_IS_STACK = 0b00000001
-};
+enum { RESOLVER_SCOPE_FLAG_IS_STACK = 0b00000001 };
 struct resolver_array_data {
   // array of type resolver_entity
   struct vector* array_entities;
@@ -613,13 +611,18 @@ struct resolver_process;
 struct resolver_scope;
 struct resolver_entity;
 
-typedef void* (*RESOLVER_NEW_ARRAY_BRACKET_ENTITY)(struct resolver_result* result, struct node* array_entity_node);
+typedef void* (*RESOLVER_NEW_ARRAY_BRACKET_ENTITY)(
+    struct resolver_result* result, struct node* array_entity_node);
 typedef void (*RESOLVER_DELETE_SCOPE)(struct resolver_scope* scope);
 typedef void (*RESOLVER_DELETE_ENTITY)(struct resolver_entity* entity);
-typedef struct resolver_entity* (*RESOLVER_MERGE_ENTITIES)(struct resolver_process* process, struct resolver_result* result, struct resolver_entity* left_entity, struct resolver_entity* right_entity);
-typedef void* (*RESOLVER_MAKE_PRIVATE)(struct resolver_entity* entity, struct node* node, int offset, struct resolver_scope* scope);
-typedef void (*RESOLVER_SET_RESULT_BASE)(struct resolver_result* result, struct resolver_entity* base_entity);
-
+typedef struct resolver_entity* (*RESOLVER_MERGE_ENTITIES)(
+    struct resolver_process* process, struct resolver_result* result,
+    struct resolver_entity* left_entity, struct resolver_entity* right_entity);
+typedef void* (*RESOLVER_MAKE_PRIVATE)(struct resolver_entity* entity,
+                                       struct node* node, int offset,
+                                       struct resolver_scope* scope);
+typedef void (*RESOLVER_SET_RESULT_BASE)(struct resolver_result* result,
+                                         struct resolver_entity* base_entity);
 
 struct resolver_callbacks {
   RESOLVER_NEW_ARRAY_BRACKET_ENTITY new_array_entity;
@@ -647,9 +650,7 @@ enum {
   RESOLVER_DEFAULT_ENTITY_TYPE_SYMBOL
 };
 
-enum {
-  RESOLVER_DEFAULT_ENTITY_FLAG_IS_LOCAL_STACK = 0b00000001
-};
+enum { RESOLVER_DEFAULT_ENTITY_FLAG_IS_LOCAL_STACK = 0b00000001 };
 
 enum {
   RESOLVER_DEFAULT_ENTITY_DATA_TYPE_VARAIBLE,
@@ -695,7 +696,7 @@ struct resolver_result {
   struct resolver_entity* last_struct_union_entity;
 
   struct resolver_array_data array_data;
-  
+
   // root entity of our result
   struct resolver_entity* entity;
 
@@ -720,7 +721,6 @@ struct resolver_scope {
 
   // private data only scope creator understands
   void* private;
-
 };
 
 struct resolver_entity {
@@ -729,7 +729,7 @@ struct resolver_entity {
   // name of the resolved entity
   // function name, var name, etc.
   const char* name;
-  
+
   // offset from ebp EBP + offset
   int offset;
 
@@ -747,35 +747,34 @@ struct resolver_entity {
       } array_runtime;
     } var_data;
 
-      struct resolver_array {
-        struct datatype dtype;
-        struct node* array_index_node;
-        int index;
-      } array;
+    struct resolver_array {
+      struct datatype dtype;
+      struct node* array_index_node;
+      int index;
+    } array;
 
-      struct resolver_entity_function_call_data {
-        // struct node* vector of function arguments
-        struct vector* arguments;
-        // total bytes used by function call
-        size_t stack_size;
-      } func_call_data;
+    struct resolver_entity_function_call_data {
+      // struct node* vector of function arguments
+      struct vector* arguments;
+      // total bytes used by function call
+      size_t stack_size;
+    } func_call_data;
 
+    struct resolver_entity_rule {
+      struct resolver_entity_rule_left {
+        int flags;
+      } left;
 
-      struct resolver_entity_rule {
-        struct resolver_entity_rule_left {
-          int flags;
-        } left;
+      struct resolver_entity_rule_right {
+        int flags;
+      } right;
+    } rule;
 
-        struct resolver_entity_rule_right {
-          int flags;
-        } right;
-      } rule;
-
-      struct resolver_indirection {
-        // int ** => 2
-        // how many times do we need to do pointer access
-        int depth;
-      } indirection;
+    struct resolver_indirection {
+      // int ** => 2
+      // how many times do we need to do pointer access
+      int depth;
+    } indirection;
   };
 
   struct entity_last_resolved {
@@ -790,7 +789,7 @@ struct resolver_entity {
 
   // result of the resolution
   struct resolver_result* result;
-  
+
   // the resolver process
   struct resolver_process* resolver;
 
@@ -809,7 +808,7 @@ enum {
   DATATYPE_FLAG_IS_POINTER = 0b00001000,
   DATATYPE_FLAG_IS_ARRAY = 0b00010000,
   DATATYPE_FLAG_IS_EXTERN = 0b00100000,
-  DATATYPE_FLAG_IS_RESTRICT = 0b01000000, 
+  DATATYPE_FLAG_IS_RESTRICT = 0b01000000,
   DATATYPE_FLAG_IGNORE_TYPE_CHECKING = 0b10000000,
   DATATYPE_FLAG_IS_SECONDARY = 0b100000000,
   DATATYPE_FLAG_STRUCT_UNION = 0b1000000000,
@@ -830,7 +829,6 @@ enum {
   DATA_TYPE_UNKNOWN
 };
 
-
 enum {
   DATA_TYPE_EXPECT_PRIMITIVE,
   DATA_TYPE_EXPECT_UNION,
@@ -845,41 +843,62 @@ enum {
   DATA_SIZE_DDWORD = 8
 };
 
-enum
-{
-    EXPRESSION_FLAG_RIGHT_NODE = 0b0000000000000001,
-    EXPRESSION_IN_FUNCTION_CALL_ARGUMENTS = 0b0000000000000010,
-    EXPRESSION_IN_FUNCTION_CALL_LEFT_OPERAND = 0b0000000000000100,
-    EXPRESSION_IS_ADDITION = 0b0000000000001000,
-    EXPRESSION_IS_SUBTRACTION = 0b0000000000010000,
-    EXPRESSION_IS_MULTIPLICATION = 0b0000000000100000,
-    EXPRESSION_IS_DIVISION = 0b0000000001000000,
-    EXPRESSION_IS_FUNCTION_CALL = 0b0000000010000000,
-    EXPRESSION_INDIRECTION = 0b0000000100000000,
-    EXPRESSION_GET_ADDRESS = 0b0000001000000000,
-    EXPRESSION_IS_ABOVE = 0b0000010000000000,
-    EXPRESSION_IS_ABOVE_OR_EQUAL = 0b0000100000000000,
-    EXPRESSION_IS_BELOW = 0b0001000000000000,
-    EXPRESSION_IS_BELOW_OR_EQUAL = 0b0010000000000000,
-    EXPRESSION_IS_EQUAL = 0b0100000000000000,
-    EXPRESSION_IS_NOT_EQUAL = 0b1000000000000000,
-    EXPRESSION_LOGICAL_AND = 0b10000000000000000,
-    EXPRESSION_LOGICAL_OR = 0b100000000000000000,
-    EXPRESSION_IN_LOGICAL_EXPRESSION = 0b1000000000000000000,
-    EXPRESSION_IS_BITSHIFT_LEFT = 0b10000000000000000000,
-    EXPRESSION_IS_BITSHIFT_RIGHT = 0b100000000000000000000,
-    EXPRESSION_IS_BITWISE_OR = 0b1000000000000000000000,
-    EXPRESSION_IS_BITWISE_AND = 0b10000000000000000000000,
-    EXPRESSION_IS_BITWISE_XOR = 0b100000000000000000000000,
-    EXPRESSION_IS_NOT_ROOT_NODE = 0b1000000000000000000000000,
-    EXPRESSION_IS_ASSIGNMENT = 0b10000000000000000000000000,
-    IS_ALONE_STATEMENT = 0b100000000000000000000000000,
-    EXPRESSION_IS_UNARY = 0b1000000000000000000000000000,
-    IS_STATEMENT_RETURN = 0b10000000000000000000000000000,
-    IS_RIGHT_OPERAND_OF_ASSIGNMENT = 0b100000000000000000000000000000,
-    IS_LEFT_OPERAND_OF_ASSIGNMENT = 0b1000000000000000000000000000000,
-    EXPRESSION_IS_MODULAS = 0b10000000000000000000000000000000,
+enum {
+  EXPRESSION_FLAG_RIGHT_NODE = 0b0000000000000001,
+  EXPRESSION_IN_FUNCTION_CALL_ARGUMENTS = 0b0000000000000010,
+  EXPRESSION_IN_FUNCTION_CALL_LEFT_OPERAND = 0b0000000000000100,
+  EXPRESSION_IS_ADDITION = 0b0000000000001000,
+  EXPRESSION_IS_SUBTRACTION = 0b0000000000010000,
+  EXPRESSION_IS_MULTIPLICATION = 0b0000000000100000,
+  EXPRESSION_IS_DIVISION = 0b0000000001000000,
+  EXPRESSION_IS_FUNCTION_CALL = 0b0000000010000000,
+  EXPRESSION_INDIRECTION = 0b0000000100000000,
+  EXPRESSION_GET_ADDRESS = 0b0000001000000000,
+  EXPRESSION_IS_ABOVE = 0b0000010000000000,
+  EXPRESSION_IS_ABOVE_OR_EQUAL = 0b0000100000000000,
+  EXPRESSION_IS_BELOW = 0b0001000000000000,
+  EXPRESSION_IS_BELOW_OR_EQUAL = 0b0010000000000000,
+  EXPRESSION_IS_EQUAL = 0b0100000000000000,
+  EXPRESSION_IS_NOT_EQUAL = 0b1000000000000000,
+  EXPRESSION_LOGICAL_AND = 0b10000000000000000,
+  EXPRESSION_LOGICAL_OR = 0b100000000000000000,
+  EXPRESSION_IN_LOGICAL_EXPRESSION = 0b1000000000000000000,
+  EXPRESSION_IS_BITSHIFT_LEFT = 0b10000000000000000000,
+  EXPRESSION_IS_BITSHIFT_RIGHT = 0b100000000000000000000,
+  EXPRESSION_IS_BITWISE_OR = 0b1000000000000000000000,
+  EXPRESSION_IS_BITWISE_AND = 0b10000000000000000000000,
+  EXPRESSION_IS_BITWISE_XOR = 0b100000000000000000000000,
+  EXPRESSION_IS_NOT_ROOT_NODE = 0b1000000000000000000000000,
+  EXPRESSION_IS_ASSIGNMENT = 0b10000000000000000000000000,
+  IS_ALONE_STATEMENT = 0b100000000000000000000000000,
+  EXPRESSION_IS_UNARY = 0b1000000000000000000000000000,
+  IS_STATEMENT_RETURN = 0b10000000000000000000000000000,
+  IS_RIGHT_OPERAND_OF_ASSIGNMENT = 0b100000000000000000000000000000,
+  IS_LEFT_OPERAND_OF_ASSIGNMENT = 0b1000000000000000000000000000000,
+  EXPRESSION_IS_MODULAS = 0b10000000000000000000000000000000,
 };
+
+
+#define EXPRESSION_GEN_MATHABLE (                                               \
+    EXPRESSION_IS_ADDITION | EXPRESSION_IS_SUBTRACTION |                       \
+    EXPRESSION_IS_MULTIPLICATION | EXPRESSION_IS_DIVISION |                    \
+    EXPRESSION_IS_MODULAS | EXPRESSION_IS_FUNCTION_CALL |                      \
+    EXPRESSION_INDIRECTION | EXPRESSION_GET_ADDRESS | EXPRESSION_IS_ABOVE |    \
+    EXPRESSION_IS_ABOVE_OR_EQUAL | EXPRESSION_IS_BELOW |                       \
+    EXPRESSION_IS_BELOW_OR_EQUAL | EXPRESSION_IS_EQUAL |                       \
+    EXPRESSION_IS_NOT_EQUAL | EXPRESSION_LOGICAL_AND | EXPRESSION_LOGICAL_OR | \
+    EXPRESSION_IN_LOGICAL_EXPRESSION | EXPRESSION_IS_BITSHIFT_LEFT |           \
+    EXPRESSION_IS_BITSHIFT_RIGHT | EXPRESSION_IS_BITWISE_OR |                  \
+    EXPRESSION_IS_BITWISE_AND | EXPRESSION_IS_BITWISE_XOR)
+
+#define EXPRESSION_UNINHERITABLE_FLAGS (            \
+      EXPRESSION_FLAG_RIGHT_NODE | EXPRESSION_IN_FUNCTION_CALL_ARGUMENTS | \
+      EXPRESSION_IS_ADDITION | EXPRESSION_IS_MODULAS | EXPRESSION_IS_SUBTRACTION | EXPRESSION_IS_MULTIPLICATION | \
+      EXPRESSION_IS_DIVISION | EXPRESSION_IS_ABOVE | EXPRESSION_IS_ABOVE_OR_EQUAL | \
+      EXPRESSION_IS_BELOW | EXPRESSION_IS_BELOW_OR_EQUAL | EXPRESSION_IS_EQUAL |    \
+      EXPRESSION_IS_NOT_EQUAL | EXPRESSION_LOGICAL_AND | \
+      EXPRESSION_IN_LOGICAL_EXPRESSION | EXPRESSION_IS_BITSHIFT_LEFT | EXPRESSION_IS_BITSHIFT_RIGHT | \
+      EXPRESSION_IS_BITWISE_OR | EXPRESSION_IS_BITWISE_AND | EXPRESSION_IS_BITWISE_XOR | EXPRESSION_IS_ASSIGNMENT | IS_ALONE_STATEMENT)
 
 enum {
   STRUCT_ACCESS_BACKWARDS = 0b00000001,
@@ -891,11 +910,11 @@ enum {
   FUNCTION_NODE_FLAG_IS_NATIVE = 0b00000001
 };
 
-
-
 int compile_file(const char* filename, const char* out_filename, int flags);
 
-struct compile_process* compile_process_create(const char* filename, const char* filename_out, int flags);
+struct compile_process* compile_process_create(const char* filename,
+                                               const char* filename_out,
+                                               int flags);
 
 char compile_process_next_char(struct lex_process* lex_process);
 char compile_process_peek_char(struct lex_process* lex_process);
@@ -904,7 +923,9 @@ void compile_process_push_char(struct lex_process* lex_process, char c);
 void compiler_error(struct compile_process* compiler, const char* msg, ...);
 void compiler_warning(struct compile_process* compiler, const char* msg, ...);
 
-struct lex_process* lex_process_create(struct compile_process* compiler, struct lex_process_functions* functions, void* private);
+struct lex_process* lex_process_create(struct compile_process* compiler,
+                                       struct lex_process_functions* functions,
+                                       void* private);
 void lex_process_free(struct lex_process* process);
 void* lex_process_private(struct lex_process* process);
 struct vector* lex_process_tokens(struct lex_process* process);
@@ -915,7 +936,8 @@ int codegen(struct compile_process* process);
 struct code_generator* codegenerator_new(struct compile_process* process);
 
 // builds tokens for an input string
-struct lex_process* tokens_build_for_string(struct compile_process* compiler, const char* str);
+struct lex_process* tokens_build_for_string(struct compile_process* compiler,
+                                            const char* str);
 bool token_is_keyword(struct token* token, const char* value);
 bool token_is_identifier(struct token* token);
 bool token_is_symbol(struct token* token, char value);
@@ -943,8 +965,11 @@ bool variable_node_is_primitive(struct node* node);
 struct node* variable_node_or_list(struct node* node);
 int array_multiplier(struct datatype* dtype, int index, int index_value);
 int array_offset(struct datatype* dtype, int index, int index_value);
-int struct_offset(struct compile_process* compile_p, const char* struct_name, const char* var_name, struct node** var_node_out, int last_pos, int flags);
-struct node* variable_struct_or_union_largest_variable_node(struct node* var_node);
+int struct_offset(struct compile_process* compile_p, const char* struct_name,
+                  const char* var_name, struct node** var_node_out,
+                  int last_pos, int flags);
+struct node* variable_struct_or_union_largest_variable_node(
+    struct node* var_node);
 struct node* body_largest_variable_node(struct node* body_node);
 
 int padding(int val, int to);
@@ -963,20 +988,26 @@ void make_label_node(struct node* name_node);
 void make_continue_node();
 void make_break_node();
 void make_goto_node(struct node* label_node);
-void make_exp_node(struct node* left_node, struct node* right_node, const char* op);
+void make_exp_node(struct node* left_node, struct node* right_node,
+                   const char* op);
 void make_unary_node(const char* op, struct node* operand_node);
 void make_exp_parentheses_node(struct node* exp_node);
 void make_bracket_node(struct node* node);
-void make_body_node(struct vector* body_vec, size_t size, bool padded, struct node* largest_var_node);
+void make_body_node(struct vector* body_vec, size_t size, bool padded,
+                    struct node* largest_var_node);
 void make_struct_node(const char* name, struct node* body_node);
 void make_union_node(const char* name, struct node* body_node);
-void make_function_node(struct datatype* ret_type, const char* name, struct vector* arguments, struct node* body_node);
-void make_switch_node(struct node* exp_node, struct node* body_node, struct vector* cases, bool has_default_case);
+void make_function_node(struct datatype* ret_type, const char* name,
+                        struct vector* arguments, struct node* body_node);
+void make_switch_node(struct node* exp_node, struct node* body_node,
+                      struct vector* cases, bool has_default_case);
 void make_do_while_node(struct node* body_node, struct node* exp_node);
 void make_while_node(struct node* exp_node, struct node* body_node);
-void make_for_node(struct node* init_node, struct node* condition_node, struct node* loop_node, struct node* body_node);
+void make_for_node(struct node* init_node, struct node* condition_node,
+                   struct node* loop_node, struct node* body_node);
 void make_return_node(struct node* exp_node);
-void make_if_node(struct node* condition_node, struct node* body_node, struct node* next_node);
+void make_if_node(struct node* condition_node, struct node* body_node,
+                  struct node* next_node);
 void make_else_node(struct node* body_node);
 
 struct node* node_pop();
@@ -1013,10 +1044,14 @@ bool node_is_struct_or_union_variable(struct node* node);
 
 struct array_brackets* array_brackets_new();
 void array_brackets_free(struct array_brackets* brackets);
-void array_brackets_add(struct array_brackets* brackets, struct node* bracket_node);
+void array_brackets_add(struct array_brackets* brackets,
+                        struct node* bracket_node);
 struct vector* array_brackets_node_vector(struct array_brackets* brackets);
-size_t array_brackets_calculate_size_from_index(struct datatype* dtype, struct array_brackets* brackets, int index);
-size_t array_brackets_calculate_size(struct datatype* dtype, struct array_brackets* brackets);
+size_t array_brackets_calculate_size_from_index(struct datatype* dtype,
+                                                struct array_brackets* brackets,
+                                                int index);
+size_t array_brackets_calculate_size(struct datatype* dtype,
+                                     struct array_brackets* brackets);
 int array_total_indexes(struct datatype* dtype);
 
 struct scope* scope_alloc();
@@ -1028,20 +1063,25 @@ void scope_iteration_start(struct scope* scope);
 void scope_iteration_end(struct scope* scope);
 void* scope_iterate_back(struct scope* scope);
 void* scope_last_entity_at_scope(struct scope* scope);
-void* scope_last_entity_from_scope_stop_at(struct scope* scope, struct scope* stop_scope);
-void* scope_last_entity_stop_at(struct compile_process* process, struct scope* stop_scope);
+void* scope_last_entity_from_scope_stop_at(struct scope* scope,
+                                           struct scope* stop_scope);
+void* scope_last_entity_stop_at(struct compile_process* process,
+                                struct scope* stop_scope);
 void* scope_last_entity(struct compile_process* process);
 void scope_push(struct compile_process* process, void* ptr, size_t elem_size);
 void scope_finish(struct compile_process* process);
 struct scope* scope_current(struct compile_process* process);
 struct scope* scope_root(struct compile_process* process);
 
-void symresolver_build_for_node(struct compile_process* process, struct node* node);
-struct symbol* symresolver_get_symbol(struct compile_process* process, const char* name);
+void symresolver_build_for_node(struct compile_process* process,
+                                struct node* node);
+struct symbol* symresolver_get_symbol(struct compile_process* process,
+                                      const char* name);
 void symresolver_initialize(struct compile_process* process);
 void symresolver_new_table(struct compile_process* process);
 void symresolver_end_table(struct compile_process* process);
-struct symbol* symresolver_get_symbol_for_native_function(struct compile_process* process, const char* name);
+struct symbol* symresolver_get_symbol_for_native_function(
+    struct compile_process* process, const char* name);
 
 size_t function_node_argument_stack_addition(struct node* node);
 bool function_node_is_prototype(struct node* node);
@@ -1049,21 +1089,21 @@ size_t function_node_stack_size(struct node* node);
 struct vector* function_node_argument_vec(struct node* node);
 
 struct node* node_from_sym(struct symbol* sym);
-struct node* node_from_symbol(struct compile_process* current_process, const char* name);
-struct node* struct_node_for_name(struct compile_process* current_process, const char* name);
-struct node* union_node_for_name(struct compile_process* current_process, const char* name);
+struct node* node_from_symbol(struct compile_process* current_process,
+                              const char* name);
+struct node* struct_node_for_name(struct compile_process* current_process,
+                                  const char* name);
+struct node* union_node_for_name(struct compile_process* current_process,
+                                 const char* name);
 
 #define TOTAL_OPERATOR_GROUPS 14
 #define MAX_OPERATORS_IN_GROUP 12
 
-enum {
-	ASSOCIATIVITY_LEFT_TO_RIGHT,
-	ASSOCIATIVITY_RIGHT_TO_LEFT
-};
+enum { ASSOCIATIVITY_LEFT_TO_RIGHT, ASSOCIATIVITY_RIGHT_TO_LEFT };
 
 struct expressionable_op_precedence_group {
-	char* operators[MAX_OPERATORS_IN_GROUP];
-	int associativity;
+  char* operators[MAX_OPERATORS_IN_GROUP];
+  int associativity;
 };
 
 struct fixup;
@@ -1075,24 +1115,22 @@ typedef bool (*FIXUP_FIX)(struct fixup* fixup);
 typedef void (*FIXUP_END)(struct fixup* fixup);
 
 struct fixup_config {
-	FIXUP_FIX fix;
-	FIXUP_END end;
-	void* private;
+  FIXUP_FIX fix;
+  FIXUP_END end;
+  void* private;
 };
 
 struct fixup_system {
-	// vector of fixups
-	struct vector* fixups;
+  // vector of fixups
+  struct vector* fixups;
 };
 
-enum {
-	FIXUP_FLAG_RESOLVED = 0b00000001
-};
+enum { FIXUP_FLAG_RESOLVED = 0b00000001 };
 
 struct fixup {
-	int flags;
-	struct fixup_system* system;
-	struct fixup_config config;
+  int flags;
+  struct fixup_system* system;
+  struct fixup_config config;
 };
 
 struct fixup_system* fixup_sys_new();
@@ -1103,40 +1141,75 @@ struct fixup* fixup_next(struct fixup_system* system);
 void fixup_sys_fixup_free(struct fixup_system* system);
 void fixup_sys_free(struct fixup_system* system);
 int fixup_sys_unresolved_fixups_count(struct fixup_system* system);
-struct fixup* fixup_register(struct fixup_system* system, struct fixup_config* config);
+struct fixup* fixup_register(struct fixup_system* system,
+                             struct fixup_config* config);
 bool fixup_resolve(struct fixup* fixup);
 void* fixup_private(struct fixup* fixup);
 bool fixups_resolve(struct fixup_system* system);
 
-struct resolver_default_entity_data* resolver_default_entity_private(struct resolver_entity* entity);
-struct resolver_default_scope_data* resolver_default_scope_private(struct resolver_scope* scope);
+struct resolver_default_entity_data* resolver_default_entity_private(
+    struct resolver_entity* entity);
+struct resolver_default_scope_data* resolver_default_scope_private(
+    struct resolver_scope* scope);
 char* resolver_default_stack_asm_address(int stack_offset, char* out);
 struct resolver_default_entity_data* resolver_default_new_entity_data();
-void resolver_default_global_asm_address(const char* name, int offset, char* address_out);
-void resolver_default_entity_data_set_address(struct resolver_default_entity_data* entity_data, struct node* var_node, int offset, int flags);
-void* resolver_default_make_private(struct resolver_entity* entity, struct node* node, int offset, struct resolver_scope* scope);
-void resolver_default_set_result_base(struct resolver_result* result, struct resolver_entity* base_entity);
-struct resolver_default_entity_data* resolver_default_new_entity_data_for_var_node(struct node* var_node, int offset, int flags);
-struct resolver_default_entity_data* resolver_default_new_entity_data_for_array_bracket(struct node* bracket_node);
-struct resolver_default_entity_data* resolver_default_new_entity_data_for_function(struct node* func_node, int flags);
-struct resolver_entity* resolver_default_new_scope_entity(struct resolver_process* resolver, struct node* var_node, int offset, int flags);
-struct resolver_entity* resolver_default_register_function(struct resolver_process* resolver, struct node* func_node, int flags);
-struct resolver_process* resolver_new_process(struct compile_process* compiler, struct resolver_callbacks* callbacks);
-struct resolver_entity* resolver_make_entity(struct resolver_process* process, struct resolver_result* result, struct datatype* custom_dtype, struct node* node, struct resolver_entity* guided_entity, struct resolver_scope* scope);
+void resolver_default_global_asm_address(const char* name, int offset,
+                                         char* address_out);
+void resolver_default_entity_data_set_address(
+    struct resolver_default_entity_data* entity_data, struct node* var_node,
+    int offset, int flags);
+void* resolver_default_make_private(struct resolver_entity* entity,
+                                    struct node* node, int offset,
+                                    struct resolver_scope* scope);
+void resolver_default_set_result_base(struct resolver_result* result,
+                                      struct resolver_entity* base_entity);
+struct resolver_default_entity_data*
+resolver_default_new_entity_data_for_var_node(struct node* var_node, int offset,
+                                              int flags);
+struct resolver_default_entity_data*
+resolver_default_new_entity_data_for_array_bracket(struct node* bracket_node);
+struct resolver_default_entity_data*
+resolver_default_new_entity_data_for_function(struct node* func_node,
+                                              int flags);
+struct resolver_entity* resolver_default_new_scope_entity(
+    struct resolver_process* resolver, struct node* var_node, int offset,
+    int flags);
+struct resolver_entity* resolver_default_register_function(
+    struct resolver_process* resolver, struct node* func_node, int flags);
+struct resolver_process* resolver_new_process(
+    struct compile_process* compiler, struct resolver_callbacks* callbacks);
+struct resolver_entity* resolver_make_entity(
+    struct resolver_process* process, struct resolver_result* result,
+    struct datatype* custom_dtype, struct node* node,
+    struct resolver_entity* guided_entity, struct resolver_scope* scope);
 void resolver_default_new_scope(struct resolver_process* resolver, int flags);
-struct resolver_entity* resolver_register_function(struct resolver_process* process, struct node* function_node, void* private);
-struct resolver_scope* resolver_new_scope(struct resolver_process* resolver, void* private, int flags);
-struct resolver_entity* resolver_create_new_entity_for_var_node(struct resolver_process* process, struct node* var_node, void* private, int offset);
+struct resolver_entity* resolver_register_function(
+    struct resolver_process* process, struct node* function_node,
+    void* private);
+struct resolver_scope* resolver_new_scope(struct resolver_process* resolver,
+                                          void* private, int flags);
+struct resolver_entity* resolver_create_new_entity_for_var_node(
+    struct resolver_process* process, struct node* var_node, void* private,
+    int offset);
 void resolver_default_finish_scope(struct resolver_process* resolver);
-void* resolver_default_new_array_entity(struct resolver_result* result, struct node* array_entity_node);
+void* resolver_default_new_array_entity(struct resolver_result* result,
+                                        struct node* array_entity_node);
 void resolver_default_delete_entity(struct resolver_entity* entity);
 void resolver_default_delete_scope(struct resolver_scope* scope);
-struct resolver_entity* resolver_default_merge_entities(struct resolver_process* resolver, struct resolver_result* result, struct resolver_entity* left_entity, struct resolver_entity* right_entity);
-struct resolver_process* resolver_default_new_process(struct compile_process* compiler);
-struct resolver_result* resolver_follow(struct resolver_process* resolver, struct node* node);
+struct resolver_entity* resolver_default_merge_entities(
+    struct resolver_process* resolver, struct resolver_result* result,
+    struct resolver_entity* left_entity, struct resolver_entity* right_entity);
+struct resolver_process* resolver_default_new_process(
+    struct compile_process* compiler);
+struct resolver_result* resolver_follow(struct resolver_process* resolver,
+                                        struct node* node);
 bool resolver_result_ok(struct resolver_result* result);
 void resolver_finish_scope(struct resolver_process* resolver);
-struct resolver_entity* resolver_result_entity_root(struct resolver_result* result);
-struct resolver_entity* resolver_result_entity_next(struct resolver_entity* entity);
-struct resolver_entity* resolver_new_entity_for_var_node(struct resolver_process* process, struct node* var_node, void* private, int offset);
+struct resolver_entity* resolver_result_entity_root(
+    struct resolver_result* result);
+struct resolver_entity* resolver_result_entity_next(
+    struct resolver_entity* entity);
+struct resolver_entity* resolver_new_entity_for_var_node(
+    struct resolver_process* process, struct node* var_node, void* private,
+    int offset);
 #endif
