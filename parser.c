@@ -678,6 +678,10 @@ void parser_datatype_init_type_and_size(struct token* datatype_token,
       compiler_error(current_process,
                      "BUG: Unsupported datatype expectation\n");
   }
+  if(pointer_depth > 0) {
+    datatype_out->flags |= DATATYPE_FLAG_IS_POINTER;
+    datatype_out->pointer_depth = pointer_depth;
+  }
 }
 
 void parser_datatype_init(struct token* datatype_token,

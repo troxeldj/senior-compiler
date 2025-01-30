@@ -1,4 +1,4 @@
 int main() {
-	int b = 50;
-	b = 20 + 10;
+	int a;
+	a = 1 && 1;	
 }

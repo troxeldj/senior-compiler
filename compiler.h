@@ -139,7 +139,7 @@ struct lex_process {
 
 enum {
   COMPILE_PROCESS_EXECUTE_NASM = 0b00000001,
-  COMPILE_PROCESS_EXPORT_AS_OBJECT = 0b00000010,
+  COMPILE_PROCESS_EXPORT_AS_OBJECT = 0b00000010
 };
 
 struct scope {
@@ -878,27 +878,30 @@ enum {
   EXPRESSION_IS_MODULAS = 0b10000000000000000000000000000000,
 };
 
+#define EXPRESSION_GEN_MATHABLE                                               \
+  (EXPRESSION_IS_ADDITION | EXPRESSION_IS_SUBTRACTION |                       \
+   EXPRESSION_IS_MULTIPLICATION | EXPRESSION_IS_DIVISION |                    \
+   EXPRESSION_IS_MODULAS | EXPRESSION_IS_FUNCTION_CALL |                      \
+   EXPRESSION_INDIRECTION | EXPRESSION_GET_ADDRESS | EXPRESSION_IS_ABOVE |    \
+   EXPRESSION_IS_ABOVE_OR_EQUAL | EXPRESSION_IS_BELOW |                       \
+   EXPRESSION_IS_BELOW_OR_EQUAL | EXPRESSION_IS_EQUAL |                       \
+   EXPRESSION_IS_NOT_EQUAL | EXPRESSION_LOGICAL_AND | EXPRESSION_LOGICAL_OR | \
+   EXPRESSION_IN_LOGICAL_EXPRESSION | EXPRESSION_IS_BITSHIFT_LEFT |           \
+   EXPRESSION_IS_BITSHIFT_RIGHT | EXPRESSION_IS_BITWISE_OR |                  \
+   EXPRESSION_IS_BITWISE_AND | EXPRESSION_IS_BITWISE_XOR)
 
-#define EXPRESSION_GEN_MATHABLE (                                               \
-    EXPRESSION_IS_ADDITION | EXPRESSION_IS_SUBTRACTION |                       \
-    EXPRESSION_IS_MULTIPLICATION | EXPRESSION_IS_DIVISION |                    \
-    EXPRESSION_IS_MODULAS | EXPRESSION_IS_FUNCTION_CALL |                      \
-    EXPRESSION_INDIRECTION | EXPRESSION_GET_ADDRESS | EXPRESSION_IS_ABOVE |    \
-    EXPRESSION_IS_ABOVE_OR_EQUAL | EXPRESSION_IS_BELOW |                       \
-    EXPRESSION_IS_BELOW_OR_EQUAL | EXPRESSION_IS_EQUAL |                       \
-    EXPRESSION_IS_NOT_EQUAL | EXPRESSION_LOGICAL_AND | EXPRESSION_LOGICAL_OR | \
-    EXPRESSION_IN_LOGICAL_EXPRESSION | EXPRESSION_IS_BITSHIFT_LEFT |           \
-    EXPRESSION_IS_BITSHIFT_RIGHT | EXPRESSION_IS_BITWISE_OR |                  \
-    EXPRESSION_IS_BITWISE_AND | EXPRESSION_IS_BITWISE_XOR)
-
-#define EXPRESSION_UNINHERITABLE_FLAGS (            \
-      EXPRESSION_FLAG_RIGHT_NODE | EXPRESSION_IN_FUNCTION_CALL_ARGUMENTS | \
-      EXPRESSION_IS_ADDITION | EXPRESSION_IS_MODULAS | EXPRESSION_IS_SUBTRACTION | EXPRESSION_IS_MULTIPLICATION | \
-      EXPRESSION_IS_DIVISION | EXPRESSION_IS_ABOVE | EXPRESSION_IS_ABOVE_OR_EQUAL | \
-      EXPRESSION_IS_BELOW | EXPRESSION_IS_BELOW_OR_EQUAL | EXPRESSION_IS_EQUAL |    \
-      EXPRESSION_IS_NOT_EQUAL | EXPRESSION_LOGICAL_AND | \
-      EXPRESSION_IN_LOGICAL_EXPRESSION | EXPRESSION_IS_BITSHIFT_LEFT | EXPRESSION_IS_BITSHIFT_RIGHT | \
-      EXPRESSION_IS_BITWISE_OR | EXPRESSION_IS_BITWISE_AND | EXPRESSION_IS_BITWISE_XOR | EXPRESSION_IS_ASSIGNMENT | IS_ALONE_STATEMENT)
+#define EXPRESSION_UNINHERITABLE_FLAGS                                  \
+  (EXPRESSION_FLAG_RIGHT_NODE | EXPRESSION_IN_FUNCTION_CALL_ARGUMENTS | \
+   EXPRESSION_IS_ADDITION | EXPRESSION_IS_MODULAS |                     \
+   EXPRESSION_IS_SUBTRACTION | EXPRESSION_IS_MULTIPLICATION |           \
+   EXPRESSION_IS_DIVISION | EXPRESSION_IS_ABOVE |                       \
+   EXPRESSION_IS_ABOVE_OR_EQUAL | EXPRESSION_IS_BELOW |                 \
+   EXPRESSION_IS_BELOW_OR_EQUAL | EXPRESSION_IS_EQUAL |                 \
+   EXPRESSION_IS_NOT_EQUAL | EXPRESSION_LOGICAL_AND |                   \
+   EXPRESSION_IS_BITSHIFT_LEFT |     \
+   EXPRESSION_IS_BITSHIFT_RIGHT | EXPRESSION_IS_BITWISE_OR |            \
+   EXPRESSION_IS_BITWISE_AND | EXPRESSION_IS_BITWISE_XOR |              \
+   EXPRESSION_IS_ASSIGNMENT | IS_ALONE_STATEMENT)
 
 enum {
   STRUCT_ACCESS_BACKWARDS = 0b00000001,
@@ -948,6 +951,10 @@ bool datatype_is_struct_or_union_for_name(const char* name);
 bool datatype_is_struct_or_union(struct datatype* dtype);
 bool datatype_is_struct_or_union_non_pointer(struct datatype* dtype);
 struct datatype datatype_for_numeric();
+struct datatype* datatype_thats_a_pointer(struct datatype* d1, struct datatype* d2);
+struct datatype* datatype_pointer_reduce(struct datatype* dtype, int by);
+bool is_logical_operator(const char* op);
+bool is_logical_node(struct node* node);
 
 size_t datatype_element_size(struct datatype* dtype);
 size_t datatype_size_for_array_access(struct datatype* dtype);
@@ -1149,6 +1156,7 @@ bool fixups_resolve(struct fixup_system* system);
 
 struct resolver_default_entity_data* resolver_default_entity_private(
     struct resolver_entity* entity);
+struct resolver_entity* resolver_result_entity(struct resolver_result* result);
 struct resolver_default_scope_data* resolver_default_scope_private(
     struct resolver_scope* scope);
 char* resolver_default_stack_asm_address(int stack_offset, char* out);
