@@ -11,6 +11,13 @@ static struct compile_process* current_process = NULL;
 static struct node* current_function = NULL;
 
 enum {
+  CODEGEN_ENTITY_RULE_IS_STRUCT_OR_UNION_NON_POINTER = 0b00000001,
+  CODEGEN_ENTITY_RULE_IS_FUNCTION_CALL = 0b00000010,
+  CODEGEN_ENTITY_RULE_IS_GET_ADDRESS = 0b00000100,
+  CODEGEN_ENTITY_RULE_WILL_PEEK_AT_EBX = 0b00001000
+};
+
+enum {
   RESPONSE_FLAG_ACKNOWLEDGED = 0b00000001,
   RESPONSE_FLAG_PUSHED_STRUCTURE = 0b00000010,
   RESPONSE_FLAG_RESOLVED_ENTITY = 0b00000100,
@@ -48,13 +55,15 @@ void codegen_generate_exp_node(struct node* node, struct history* history);
 const char* codegen_sub_register(const char* original_register, size_t size);
 void codegen_generate_entity_access_for_function_call(
     struct resolver_result* result, struct resolver_entity* entity);
-void codegen_generate_structure_push(struct resolver_entity* entity, struct history* history, int start_pos);
+void codegen_generate_structure_push(struct resolver_entity* entity,
+                                     struct history* history, int start_pos);
 void codegen_plus_or_minus_string_for_value(char* out, int val, size_t len);
-bool codegen_resolve_node_for_value(struct node* node,
-                                    struct history* history);
+bool codegen_resolve_node_for_value(struct node* node, struct history* history);
 void codegen_generate_expressionable(struct node* node,
                                      struct history* history);
 bool asm_datatype_back(struct datatype* dtype_out);
+void codegen_generate_entity_access_for_unary_get_address(
+    struct resolver_result* result, struct resolver_entity* entity);
 
 void codegen_response_expect() {
   struct response* res = calloc(1, sizeof(struct response));
@@ -155,19 +164,20 @@ void asm_push_ins_push(const char* fmt, int stack_entity_type,
                                                 .name = stack_entity_name});
 }
 
-void asm_push_ins_push_with_flags(const char* fmt, int stack_entity_type, const char* stack_entity_name, int flags, ...) {
-	char tmp_buf[200];
-	sprintf(tmp_buf, "push %s", fmt);
-	va_list args;
-	va_start(args, flags);
-	asm_push_args(tmp_buf, args);
-	va_end(args);
-	assert(current_function);
-	stackframe_push(current_function, &(struct stack_frame_element){
-		.flags = flags,
-		.type = stack_entity_type,
-		.name = stack_entity_name
-	});
+void asm_push_ins_push_with_flags(const char* fmt, int stack_entity_type,
+                                  const char* stack_entity_name, int flags,
+                                  ...) {
+  char tmp_buf[200];
+  sprintf(tmp_buf, "push %s", fmt);
+  va_list args;
+  va_start(args, flags);
+  asm_push_args(tmp_buf, args);
+  va_end(args);
+  assert(current_function);
+  stackframe_push(current_function,
+                  &(struct stack_frame_element){.flags = flags,
+                                                .type = stack_entity_type,
+                                                .name = stack_entity_name});
 }
 
 int asm_push_ins_pop(const char* fmt, int expecting_stack_entity_type,
@@ -431,12 +441,13 @@ void codegen_generate_global_variable_for_primitive(struct node* node) {
 }
 
 void codegen_generate_global_variable_for_struct(struct node* node) {
-	if(node->var.value != NULL) {
-		compiler_error(current_process, "Don't support values for structures\n");
-		return;
-	}
-	char tmp_buf[256];
-	asm_push("%s: %s 0", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf));
+  if (node->var.value != NULL) {
+    compiler_error(current_process, "Don't support values for structures\n");
+    return;
+  }
+  char tmp_buf[256];
+  asm_push("%s: %s 0", node->var.name,
+           asm_keyword_for_size(variable_size(node), tmp_buf));
 }
 
 void codegen_generate_global_variable(struct node* node) {
@@ -449,10 +460,10 @@ void codegen_generate_global_variable(struct node* node) {
     case DATA_TYPE_LONG:
       codegen_generate_global_variable_for_primitive(node);
       break;
-		
-		case DATA_TYPE_STRUCT:
-			codegen_generate_global_variable_for_struct(node);
-			break;
+
+    case DATA_TYPE_STRUCT:
+      codegen_generate_global_variable_for_struct(node);
+      break;
 
     case DATA_TYPE_FLOAT:
     case DATA_TYPE_DOUBLE:
@@ -464,9 +475,9 @@ void codegen_generate_global_variable(struct node* node) {
 }
 
 void codegen_generate_struct(struct node* node) {
-	if(node->flags & NODE_FLAG_HAS_VARIABLE_COMBINED) {
-		codegen_generate_global_variable(node->_struct.var);
-	}
+  if (node->flags & NODE_FLAG_HAS_VARIABLE_COMBINED) {
+    codegen_generate_global_variable(node->_struct.var);
+  }
 }
 
 void codegen_generate_data_section_part(struct node* node) {
@@ -476,9 +487,9 @@ void codegen_generate_data_section_part(struct node* node) {
       codegen_generate_global_variable(node);
       break;
 
-		case NODE_TYPE_STRUCT:
-			codegen_generate_struct(node);
-			break;
+    case NODE_TYPE_STRUCT:
+      codegen_generate_struct(node);
+      break;
 
     default:
       break;
@@ -533,26 +544,32 @@ void codegen_reduce_register(const char* reg, size_t size, bool is_signed) {
   }
 }
 
-void codegen_gen_mem_access_get_address(struct node* node, int flags, struct resolver_entity* entity) {
-	asm_push("lea ebx, [%s]", codegen_entity_private(entity)->address);
-	asm_push_ins_push_with_flags("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", STACK_FRAME_ELEMENT_FLAG_IS_PUSHED_ADDRESS);
+void codegen_gen_mem_access_get_address(struct node* node, int flags,
+                                        struct resolver_entity* entity) {
+  asm_push("lea ebx, [%s]", codegen_entity_private(entity)->address);
+  asm_push_ins_push_with_flags("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                               "result_value",
+                               STACK_FRAME_ELEMENT_FLAG_IS_PUSHED_ADDRESS);
 }
 
-void codegen_generate_structure_push_or_return(struct resolver_entity* entity, struct history* history, int start_pos) {
-	codegen_generate_structure_push(entity, history, start_pos);
+void codegen_generate_structure_push_or_return(struct resolver_entity* entity,
+                                               struct history* history,
+                                               int start_pos) {
+  codegen_generate_structure_push(entity, history, start_pos);
 }
 
 void codegen_gen_mem_access(struct node* node, int flags,
                             struct resolver_entity* entity) {
-	if(flags & EXPRESSION_GET_ADDRESS) {
-		codegen_gen_mem_access_get_address(node, flags, entity);
-		return;
-	}
-	if(datatype_is_struct_or_union_non_pointer(&entity->dtype)) {
-		codegen_gen_mem_access_get_address(node, 0, entity);
-		asm_push_ins_pop("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
-		codegen_generate_structure_push_or_return(entity, history_begin(0), 0);
-	} else if (datatype_element_size(&entity->dtype) != DATA_SIZE_DWORD) {
+  if (flags & EXPRESSION_GET_ADDRESS) {
+    codegen_gen_mem_access_get_address(node, flags, entity);
+    return;
+  }
+  if (datatype_is_struct_or_union_non_pointer(&entity->dtype)) {
+    codegen_gen_mem_access_get_address(node, 0, entity);
+    asm_push_ins_pop("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                     "result_value");
+    codegen_generate_structure_push_or_return(entity, history_begin(0), 0);
+  } else if (datatype_element_size(&entity->dtype) != DATA_SIZE_DWORD) {
     asm_push("mov eax, [%s]", codegen_entity_private(entity)->address);
     codegen_reduce_register("eax", datatype_element_size(&entity->dtype),
                             entity->dtype.flags & DATATYPE_FLAG_IS_SIGNED);
@@ -592,27 +609,91 @@ void codegen_generate_identifier(struct node* node, struct history* history) {
       .flags = RESPONSE_FLAG_RESOLVED_ENTITY, .data.resolved_entity = entity});
 }
 
-void codegen_generate_unary_address(struct node* node, struct history* history) {
-	int flags = history->flags;
-	codegen_generate_expressionable(node->unary.operand, history_down(history, flags | EXPRESSION_GET_ADDRESS));
-	codegen_response_acknowledge(&(struct response){
-		.flags = RESPONSE_FLAG_UNARY_GET_ADDRESS	
-	});
+void codegen_generate_unary_address(struct node* node,
+                                    struct history* history) {
+  int flags = history->flags;
+  codegen_generate_expressionable(
+      node->unary.operand,
+      history_down(history, flags | EXPRESSION_GET_ADDRESS));
+  codegen_response_acknowledge(
+      &(struct response){.flags = RESPONSE_FLAG_UNARY_GET_ADDRESS});
+}
+
+void codegen_generate_unary_indirection(struct node* node,
+                                        struct history* history) {
+  const char* reg_to_use = "ebx";
+  int flags = history->flags;
+  codegen_response_expect();
+  codegen_generate_expressionable(
+      node->unary.operand,
+      history_down(history,
+                   flags | EXPRESSION_GET_ADDRESS | EXPRESSION_INDIRECTION));
+  struct response* response = codegen_response_pull();
+  assert(codegen_response_has_entity(response));
+  struct datatype operand_dtype;
+  assert(asm_datatype_back(&operand_dtype));
+  asm_push_ins_pop(reg_to_use, STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                   "result_value");
+
+  int depth = node->unary.indirection.depth;
+  int real_depth = depth;
+
+  if (!(history->flags & EXPRESSION_GET_ADDRESS)) {
+    depth++;
+  }
+
+  for (int i = 0; i < depth; i++) {
+    asm_push("mov %s, [%s]", reg_to_use, reg_to_use);
+  }
+
+  if (real_depth == response->data.resolved_entity->dtype.pointer_depth) {
+    codegen_reduce_register(reg_to_use, datatype_size_no_ptr(&operand_dtype),
+                            operand_dtype.flags & DATATYPE_FLAG_IS_SIGNED);
+  }
+  asm_push_ins_push_with_data(
+      reg_to_use, STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,
+      &(struct stack_frame_data){.dtype = operand_dtype});
+  codegen_response_acknowledge(&(struct response){
+      .flags = RESPONSE_FLAG_RESOLVED_ENTITY,
+      .data.resolved_entity = response->data.resolved_entity});
+}
+
+void codegen_generate_normal_unary(struct node* node, struct history* history) {
+  codegen_generate_expressionable(node->unary.operand, history);
+  struct datatype last_dtype;
+  assert(asm_datatype_back(&last_dtype));
+
+  asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                   "result_value");
+  // negation unary
+  if (S_EQ(node->unary.op, "-")) {
+    asm_push("neg eax");
+    asm_push_ins_push_with_data(
+        "eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,
+        &(struct stack_frame_data){.dtype = last_dtype});
+  } else if (S_EQ(node->unary.op, "~")) {
+    asm_push("not eax");
+    asm_push_ins_push_with_data(
+        "eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,
+        &(struct stack_frame_data){.dtype = last_dtype});
+  } else if (S_EQ(node->unary.op, "*")) {
+    codegen_generate_unary_indirection(node, history);
+  }
 }
 
 void codegen_generate_unary(struct node* node, struct history* history) {
-	int flags = history->flags;
-	if(codegen_resolve_node_for_value(node, history)) {
-		return;
-	}
-	if(op_is_indirection(node->unary.op)) {
-		#warning "implement pointer unary later on"
-		return;
-	} else if(op_is_address(node->unary.op)) {
-		codegen_generate_unary_address(node, history);
-		return;
-	}
-	#warning "generate normal unary"
+  int flags = history->flags;
+  if (codegen_resolve_node_for_value(node, history)) {
+    return;
+  }
+  if (op_is_indirection(node->unary.op)) {
+    codegen_generate_unary_indirection(node, history);
+    return;
+  } else if (op_is_address(node->unary.op)) {
+    codegen_generate_unary_address(node, history);
+    return;
+  }
+  codegen_generate_normal_unary(node, history);
 }
 
 void codegen_generate_expressionable(struct node* node,
@@ -635,9 +716,9 @@ void codegen_generate_expressionable(struct node* node,
       codegen_generate_exp_node(node, history);
       break;
 
-		case NODE_TYPE_UNARY:
-			codegen_generate_unary(node, history);
-			break;
+    case NODE_TYPE_UNARY:
+      codegen_generate_unary(node, history);
+      break;
   }
 }
 
@@ -771,6 +852,49 @@ void codegen_generate_entity_access_for_variable_or_general(
       &(struct stack_frame_data){.dtype = entity->dtype});
 }
 
+int codegen_entity_rules(struct resolver_entity* last_entity,
+                         struct history* history) {
+  int rule_flags = 0;
+  if (!last_entity) {
+    return 0;
+  }
+
+  if (datatype_is_struct_or_union_non_pointer(&last_entity->dtype)) {
+    rule_flags |= CODEGEN_ENTITY_RULE_IS_STRUCT_OR_UNION_NON_POINTER;
+  }
+
+  if (last_entity->type == RESOLVER_ENTITY_TYPE_FUNCTION_CALL) {
+    rule_flags |= CODEGEN_ENTITY_RULE_IS_FUNCTION_CALL;
+  } else if (history->flags & EXPRESSION_GET_ADDRESS) {
+    rule_flags |= CODEGEN_ENTITY_RULE_IS_GET_ADDRESS;
+  } else if (last_entity->type == RESOLVER_ENTITY_TYPE_UNARY_GET_ADDRESS) {
+    rule_flags |= CODEGEN_ENTITY_RULE_IS_GET_ADDRESS;
+  } else {
+    rule_flags |= CODEGEN_ENTITY_RULE_WILL_PEEK_AT_EBX;
+  }
+  return rule_flags;
+}
+
+void codegen_apply_unary_access(int depth) {
+  for (int i = 0; i < depth; i++) {
+    asm_push("mov ebx, [ebx]");
+  }
+}
+
+void codegen_generate_entity_access_for_unary_indirection_for_assignment_left_operand(
+    struct resolver_result* result, struct resolver_entity* entity,
+    struct history* history) {
+  asm_push("; INDIRECTION");
+  int flags = asm_push_ins_pop("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                               "result_value");
+  int gen_entity_rules = codegen_entity_rules(result->last_entity, history);
+  int depth = entity->indirection.depth - 1;
+  codegen_apply_unary_access(depth);
+  asm_push_ins_push_with_flags("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                               "result_value",
+                               STACK_FRAME_ELEMENT_FLAG_IS_PUSHED_ADDRESS);
+}
+
 void codegen_generate_entity_access_for_entity_for_assignment_left_operand(
     struct resolver_result* result, struct resolver_entity* entity,
     struct history* history) {
@@ -788,9 +912,12 @@ void codegen_generate_entity_access_for_entity_for_assignment_left_operand(
       break;
 
     case RESOLVER_ENTITY_TYPE_UNARY_INDIRECTION:
+      codegen_generate_entity_access_for_unary_indirection_for_assignment_left_operand(
+          result, entity, history);
       break;
 
     case RESOLVER_ENTITY_TYPE_UNARY_GET_ADDRESS:
+      codegen_generate_entity_access_for_unary_get_address(result, entity);
       break;
 
     case RESOLVER_ENTITY_TYPE_UNSUPPORTED:
@@ -818,16 +945,18 @@ void codegen_generate_entity_access_for_assignment_left_operand(
   }
 }
 
-void codegen_generate_move_struct(struct datatype* dtype, const char* base_address, signed int offset) {
-	size_t structure_size = align_value(datatype_size(dtype), DATA_SIZE_DWORD);
-	int pops = structure_size / DATA_SIZE_DWORD;
-	for(int i = 0; i < pops; i++) {
-		asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
-		char fmt[10];
-		int chunk_offset = offset + (i * DATA_SIZE_DWORD);
-		codegen_plus_or_minus_string_for_value(fmt, chunk_offset, sizeof(fmt));
-		asm_push("mov [%s%s], eax", base_address, fmt);
-	}
+void codegen_generate_move_struct(struct datatype* dtype,
+                                  const char* base_address, signed int offset) {
+  size_t structure_size = align_value(datatype_size(dtype), DATA_SIZE_DWORD);
+  int pops = structure_size / DATA_SIZE_DWORD;
+  for (int i = 0; i < pops; i++) {
+    asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                     "result_value");
+    char fmt[10];
+    int chunk_offset = offset + (i * DATA_SIZE_DWORD);
+    codegen_plus_or_minus_string_for_value(fmt, chunk_offset, sizeof(fmt));
+    asm_push("mov [%s%s], eax", base_address, fmt);
+  }
 }
 
 void codegen_generate_assignment_part(struct node* node, const char* op,
@@ -845,7 +974,8 @@ void codegen_generate_assignment_part(struct node* node, const char* op,
       resolver_result_entity_next(root_assignment_entity);
   if (!next_entity) {
     if (datatype_is_struct_or_union_non_pointer(&result->last_entity->dtype)) {
-			codegen_generate_move_struct(&result->last_entity->dtype, result->base.address, 0);
+      codegen_generate_move_struct(&result->last_entity->dtype,
+                                   result->base.address, 0);
     } else {
       asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
                        "result_value");
@@ -885,9 +1015,12 @@ void codegen_generate_entity_access_for_function_call(
                    "result_value");
   asm_push("mov ecx, ebx");
   if (datatype_is_struct_or_union_non_pointer(&entity->dtype)) {
-		asm_push("; SUBTRACT ROOM FOR RETURNED STRUCTURE/UNION DATATYPE");
-		codegen_stack_sub_with_name(align_value(datatype_size(&entity->dtype), DATA_SIZE_DWORD), "result_value");
-		asm_push_ins_push("esp", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+    asm_push("; SUBTRACT ROOM FOR RETURNED STRUCTURE/UNION DATATYPE");
+    codegen_stack_sub_with_name(
+        align_value(datatype_size(&entity->dtype), DATA_SIZE_DWORD),
+        "result_value");
+    asm_push_ins_push("esp", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                      "result_value");
   }
 
   while (node) {
@@ -902,20 +1035,47 @@ void codegen_generate_entity_access_for_function_call(
   }
   codegen_stack_add(stack_size);
   if (datatype_is_struct_or_union_non_pointer(&entity->dtype)) {
-		asm_push("mov ebx, eax");
-		codegen_generate_structure_push(entity, history_begin(0), 0);
+    asm_push("mov ebx, eax");
+    codegen_generate_structure_push(entity, history_begin(0), 0);
   } else {
     asm_push_ins_push_with_data(
         "eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,
         &(struct stack_frame_data){.dtype = entity->dtype});
   }
-	struct resolver_entity* next_entity = resolver_result_entity_next(entity);
-	if(next_entity && datatype_is_struct_or_union(&entity->dtype)) {
-		asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
-		asm_push("mov ebx, eax");
-		asm_push_ins_push("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
-	}
+  struct resolver_entity* next_entity = resolver_result_entity_next(entity);
+  if (next_entity && datatype_is_struct_or_union(&entity->dtype)) {
+    asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                     "result_value");
+    asm_push("mov ebx, eax");
+    asm_push_ins_push("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                      "result_value");
+  }
+}
 
+void codegen_generate_entity_access_for_unary_indirection(
+    struct resolver_result* result, struct resolver_entity* entity,
+    struct history* history) {
+  asm_push("; INDIRECTION");
+  struct datatype operand_datatype;
+  assert(asm_datatype_back(&operand_datatype));
+  int flags = asm_push_ins_pop("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                               "result_value");
+  int gen_entity_rules = codegen_entity_rules(result->last_entity, history);
+  int depth = entity->indirection.depth;
+  codegen_apply_unary_access(depth);
+  asm_push_ins_push_with_data(
+      "ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,
+      &(struct stack_frame_data){.dtype = operand_datatype});
+}
+
+void codegen_generate_entity_access_for_unary_get_address(
+    struct resolver_result* result, struct resolver_entity* entity) {
+  asm_push_ins_pop("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                   "result_value");
+  asm_push("; PUSH ADDRESS &");
+  asm_push_ins_push_with_data(
+      "ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,
+      &(struct stack_frame_data){.dtype = entity->dtype});
 }
 
 void codegen_generate_entity_access_for_entity(struct resolver_result* result,
@@ -935,9 +1095,12 @@ void codegen_generate_entity_access_for_entity(struct resolver_result* result,
       break;
 
     case RESOLVER_ENTITY_TYPE_UNARY_INDIRECTION:
+      codegen_generate_entity_access_for_unary_indirection(result, entity,
+                                                           history);
       break;
 
     case RESOLVER_ENTITY_TYPE_UNARY_GET_ADDRESS:
+      codegen_generate_entity_access_for_unary_get_address(result, entity);
       break;
 
     case RESOLVER_ENTITY_TYPE_UNSUPPORTED:
@@ -996,22 +1159,25 @@ bool codegen_resolve_node_for_value(struct node* node,
     return false;
   }
 
-	struct datatype dtype;
-	assert(asm_datatype_back(&dtype));
+  struct datatype dtype;
+  assert(asm_datatype_back(&dtype));
 
-	if(datatype_is_struct_or_union_non_pointer(&dtype)) {
-		codegen_generate_structure_push(result->last_entity, history, 0);
-	} else if (!(dtype.flags & DATATYPE_FLAG_IS_POINTER)) {
-		asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
-		if(result->flags & RESOLVER_RESULT_FLAG_FINAL_INDIRECTION_REQUIRED_FOR_VALUE) {
-			asm_push("mov eax, [eax]");
-		}
+  if (datatype_is_struct_or_union_non_pointer(&dtype)) {
+    codegen_generate_structure_push(result->last_entity, history, 0);
+  } else if (!(dtype.flags & DATATYPE_FLAG_IS_POINTER)) {
+    asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                     "result_value");
+    if (result->flags &
+        RESOLVER_RESULT_FLAG_FINAL_INDIRECTION_REQUIRED_FOR_VALUE) {
+      asm_push("mov eax, [eax]");
+    }
 
-		codegen_reduce_register("eax", datatype_element_size(&dtype), dtype.flags & DATATYPE_FLAG_IS_SIGNED);
-		asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){
-			.dtype = dtype
-		});
-	}
+    codegen_reduce_register("eax", datatype_element_size(&dtype),
+                            dtype.flags & DATATYPE_FLAG_IS_SIGNED);
+    asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+                                "result_value", 0,
+                                &(struct stack_frame_data){.dtype = dtype});
+  }
 
   return true;
 }
@@ -1318,28 +1484,30 @@ void codegen_discard_unused_stack() {
 }
 
 void codegen_plus_or_minus_string_for_value(char* out, int val, size_t len) {
-	memset(out, 0, len);
-	if(val < 0) {
-		sprintf(out, "%i", val);
-	} else {
-		sprintf(out, "+%i", val);
-	}
+  memset(out, 0, len);
+  if (val < 0) {
+    sprintf(out, "%i", val);
+  } else {
+    sprintf(out, "+%i", val);
+  }
 }
 
-void codegen_generate_structure_push(struct resolver_entity* entity, struct history* history, int start_pos) {
-	asm_push("; STRUCTURE PUSH");
-	size_t structure_size = align_value(entity->dtype.size, DATA_SIZE_DWORD);
-	int pushes = structure_size / DATA_SIZE_DWORD;
-	for(int i = pushes - 1; i >= start_pos; i--) {
-		char fmt[10];
-		int chunk_offset = (i * DATA_SIZE_DWORD);
-		codegen_plus_or_minus_string_for_value(fmt, chunk_offset, sizeof(fmt));
-		asm_push_ins_push_with_data("dword [%s%s]", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){
-			.dtype = entity->dtype
-		}, "ebx", fmt);
-	}
-	asm_push("; END STRUCTURE PUSH");
-	codegen_response_acknowledge(RESPONSE_SET(.flags=RESPONSE_FLAG_PUSHED_STRUCTURE));
+void codegen_generate_structure_push(struct resolver_entity* entity,
+                                     struct history* history, int start_pos) {
+  asm_push("; STRUCTURE PUSH");
+  size_t structure_size = align_value(entity->dtype.size, DATA_SIZE_DWORD);
+  int pushes = structure_size / DATA_SIZE_DWORD;
+  for (int i = pushes - 1; i >= start_pos; i--) {
+    char fmt[10];
+    int chunk_offset = (i * DATA_SIZE_DWORD);
+    codegen_plus_or_minus_string_for_value(fmt, chunk_offset, sizeof(fmt));
+    asm_push_ins_push_with_data(
+        "dword [%s%s]", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value",
+        0, &(struct stack_frame_data){.dtype = entity->dtype}, "ebx", fmt);
+  }
+  asm_push("; END STRUCTURE PUSH");
+  codegen_response_acknowledge(
+      RESPONSE_SET(.flags = RESPONSE_FLAG_PUSHED_STRUCTURE));
 }
 
 void codegen_generate_statement(struct node* node, struct history* history) {
@@ -1352,7 +1520,7 @@ void codegen_generate_statement(struct node* node, struct history* history) {
       codegen_generate_exp_node(node, history_begin(history->flags));
       break;
   }
-	codegen_discard_unused_stack();
+  codegen_discard_unused_stack();
 }
 
 void codegen_generate_scope_no_new_scope(struct vector* statements,
