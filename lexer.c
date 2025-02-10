@@ -493,7 +493,6 @@ struct token* read_next_token() {
       break;
 
     case EOF:
-    case (unsigned char)EOF:
       // We have finished lexical analysis on the file
       break;
 

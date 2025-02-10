@@ -64,6 +64,7 @@ void codegen_generate_expressionable(struct node* node,
 bool asm_datatype_back(struct datatype* dtype_out);
 void codegen_generate_entity_access_for_unary_get_address(
     struct resolver_result* result, struct resolver_entity* entity);
+void codegen_generate_entity_access_for_unsupported(struct resolver_result* result, struct resolver_entity* entity);
 
 void codegen_response_expect() {
   struct response* res = calloc(1, sizeof(struct response));
@@ -132,6 +133,12 @@ void codegen_finish_scope() {
 
 struct node* codegen_node_next() {
   return vector_peek_ptr(current_process->node_tree_vec);
+}
+
+void codegen_stack_add_no_compile_time_stack_frame_restore(size_t stack_size) {
+	if(stack_size != 0) {
+		asm_push("add esp, %lld", stack_size);
+	}
 }
 
 struct resolver_default_entity_data* codegen_entity_private(
@@ -224,6 +231,10 @@ void asm_push_ebp() {
 void asm_pop_ebp() {
   asm_push_ins_pop("ebp", STACK_FRAME_ELEMENT_TYPE_SAVED_BP,
                    "function_entry_saved_ebp");
+}
+
+void asm_pop_ebp_no_stack_frame_restore() {
+	asm_push("pop ebp");
 }
 
 void codegen_stack_sub_with_name(size_t stack_size, const char* name) {
@@ -414,7 +425,7 @@ static const char* asm_keyword_for_size(size_t size, char* tmp_buf) {
       break;
 
     default:
-      sprintf(tmp_buf, "times %lld db ", (unsigned long)size);
+      sprintf(tmp_buf, "times %lu db ", (unsigned long)size);
       return tmp_buf;
   }
 
@@ -895,6 +906,10 @@ void codegen_generate_entity_access_for_unary_indirection_for_assignment_left_op
                                STACK_FRAME_ELEMENT_FLAG_IS_PUSHED_ADDRESS);
 }
 
+void codegen_generate_entity_access_for_unsupported(struct resolver_result* result, struct resolver_entity* entity) {
+	codegen_generate_expressionable(entity->node, history_begin(0));
+}
+
 void codegen_generate_entity_access_for_entity_for_assignment_left_operand(
     struct resolver_result* result, struct resolver_entity* entity,
     struct history* history) {
@@ -921,6 +936,7 @@ void codegen_generate_entity_access_for_entity_for_assignment_left_operand(
       break;
 
     case RESOLVER_ENTITY_TYPE_UNSUPPORTED:
+			codegen_generate_entity_access_for_unsupported(result, entity);
       break;
 
     case RESOLVER_ENTITY_TYPE_CAST:
@@ -1104,6 +1120,7 @@ void codegen_generate_entity_access_for_entity(struct resolver_result* result,
       break;
 
     case RESOLVER_ENTITY_TYPE_UNSUPPORTED:
+			codegen_generate_entity_access_for_unsupported(result, entity);
       break;
 
     case RESOLVER_ENTITY_TYPE_CAST:
@@ -1510,6 +1527,29 @@ void codegen_generate_structure_push(struct resolver_entity* entity,
       RESPONSE_SET(.flags = RESPONSE_FLAG_PUSHED_STRUCTURE));
 }
 
+void codegen_generate_statement_return_exp(struct node* node) {
+	codegen_response_expect();
+	codegen_generate_expressionable(node->stmt.return_stmt.exp, history_begin(IS_STATEMENT_RETURN));
+	struct datatype dtype;
+	assert(asm_datatype_back(&dtype));
+	if(datatype_is_struct_or_union_non_pointer(&dtype)) {
+		asm_push("mov edx, [ebp+8]");
+		codegen_generate_move_struct(&dtype, "edx", 0);
+		asm_push("mov eax, [ebp+8]");
+		return;
+	}
+	asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+}
+
+void codegen_generate_statement_return(struct node* node) {
+	if(node->stmt.return_stmt.exp) {
+		codegen_generate_statement_return_exp(node);
+	}
+	codegen_stack_add_no_compile_time_stack_frame_restore(C_ALIGN(function_node_stack_size(current_function)));
+	asm_pop_ebp_no_stack_frame_restore();
+	asm_push("ret");
+}
+
 void codegen_generate_statement(struct node* node, struct history* history) {
   switch (node->type) {
     case NODE_TYPE_VARIABLE:
@@ -1519,6 +1559,14 @@ void codegen_generate_statement(struct node* node, struct history* history) {
     case NODE_TYPE_EXPRESSION:
       codegen_generate_exp_node(node, history_begin(history->flags));
       break;
+
+		case NODE_TYPE_UNARY:
+			codegen_generate_unary(node, history_begin(history->flags));
+			break;
+
+		case NODE_TYPE_STATEMENT_RETURN:
+			codegen_generate_statement_return(node);
+			break;
   }
   codegen_discard_unused_stack();
 }

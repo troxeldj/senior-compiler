@@ -6,11 +6,15 @@ struct dog {
 };
 
 
-int main() {
-	int* p;
-	int b;
-	b = 50;
-	p = &b;
-	int e;
-	e = *p;
+struct dog get_dog() {
+	struct dog d;
+	d.b = 50;
+	return d;
+}
+
+
+struct dog a;
+int main () {
+	a = get_dog();
+	return a.b;
 }
