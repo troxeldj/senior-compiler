@@ -65,6 +65,7 @@ bool asm_datatype_back(struct datatype* dtype_out);
 void codegen_generate_entity_access_for_unary_get_address(
     struct resolver_result* result, struct resolver_entity* entity);
 void codegen_generate_entity_access_for_unsupported(struct resolver_result* result, struct resolver_entity* entity);
+void codegen_generate_body(struct node* node, struct history* history);
 
 void codegen_response_expect() {
   struct response* res = calloc(1, sizeof(struct response));
@@ -204,6 +205,23 @@ int asm_push_ins_pop(const char* fmt, int expecting_stack_entity_type,
   return flags;
 }
 
+int asm_push_ins_pop_or_ignore(const char* fmt, int expecting_stack_entity_type, const char* expecting_stack_entity_name, ...) {
+	if(!stackframe_back_expect(current_function, expecting_stack_entity_type, expecting_stack_entity_name)) {
+		return STACK_FRAME_ELEMENT_FLAG_ELEMENT_NOT_FOUND;
+	}
+
+	char tmp_buf[200];
+	sprintf(tmp_buf, "pop %s", fmt);
+	va_list args;
+	va_start(args, expecting_stack_entity_name);
+	asm_push_args(tmp_buf, args);
+	va_end(args);
+	struct stack_frame_element* element = stackframe_back(current_function);
+	int flags = element->flags;
+	stackframe_pop_expecting(current_function, expecting_stack_entity_type, expecting_stack_entity_name);
+	return flags;
+}
+
 void asm_push_ins_push_with_data(const char* fmt, int stack_entity_type,
                                  const char* stack_entity_name, int flags,
                                  struct stack_frame_data* data, ...) {
@@ -320,6 +338,7 @@ struct code_generator* codegenerator_new(struct compile_process* process) {
   generator->entry_points = vector_create(sizeof(struct codegen_entry_point*));
   generator->exit_points = vector_create(sizeof(struct codegen_exit_point*));
   generator->responses = vector_create(sizeof(struct response*));
+	generator->_switch.switches = vector_create(sizeof(struct generator_switch_stmt_entity));
   return generator;
 }
 
@@ -360,6 +379,12 @@ void codegen_goto_exit_point(struct node* node) {
   struct code_generator* generator = current_process->generator;
   struct codegen_exit_point* exit_point = codegen_current_exit_point();
   asm_push("jmp .exit_point_%i", exit_point->id);
+}
+
+void codegen_goto_exit_point_maintain_stack(struct node* node) {
+	struct code_generator* generator = current_process->generator;
+	struct codegen_exit_point* exit_point = codegen_current_exit_point();
+	asm_push("jmp .exit_point_%i", exit_point->id);
 }
 
 void codegen_register_entry_point(int entry_point_id) {
@@ -403,6 +428,41 @@ void codegen_begin_entry_exit_point() {
 void codegen_end_entry_exit_point() {
   codegen_end_entry_point();
   codegen_end_exit_point();
+}
+
+void codegen_begin_switch_statement() {
+	struct code_generator* generator = current_process->generator;
+	struct generator_switch_stmt* switch_stmt_data = &generator->_switch;
+	vector_push(switch_stmt_data->switches, &switch_stmt_data->current);
+	memset(&switch_stmt_data->current, 0, sizeof(struct generator_switch_stmt_entity));
+	int switch_stmt_id = codegen_label_count();
+	asm_push(".switch_stmt_%i:", switch_stmt_id);	
+	switch_stmt_data->current.id = switch_stmt_id;
+}
+
+void codegen_end_switch_statement() {
+	struct code_generator* generator = current_process->generator;
+	struct generator_switch_stmt* switch_stmt_data = &generator->_switch;
+	asm_push(".switch_stmt_%i_end:", switch_stmt_data->current.id);
+	// restore older switch statement
+	memcpy(&switch_stmt_data->current, vector_back(switch_stmt_data->switches), sizeof(struct generator_switch_stmt_entity));
+	vector_pop(switch_stmt_data->switches);
+}
+
+int codegen_switch_id() {
+	struct code_generator* generator = current_process->generator;
+	struct generator_switch_stmt* switch_stmt_data = &generator->_switch;
+	return switch_stmt_data->current.id;
+}
+
+void codegen_begin_case_statement(int index) {
+	struct code_generator* generator = current_process->generator;
+	struct generator_switch_stmt* switch_stmt_data = &generator->_switch;
+	asm_push(".switch_stmt_%i_case_%i:", switch_stmt_data->current.id, index);
+}
+
+void codegen_end_case_statement() {
+	// Do nothing.	
 }
 
 static const char* asm_keyword_for_size(size_t size, char* tmp_buf) {
@@ -1550,6 +1610,158 @@ void codegen_generate_statement_return(struct node* node) {
 	asm_push("ret");
 }
 
+void _codegen_generate_if_statement(struct node* node, int end_label_id);
+
+void codegen_generate_else_statement(struct node* node) {
+	codegen_generate_body(node->stmt.else_stmt.body_node, history_begin(0));
+}
+
+void codegen_generate_else_or_else_if(struct node* node, int end_label_id) {
+	if(node->type == NODE_TYPE_STATEMENT_IF) {
+		_codegen_generate_if_statement(node, end_label_id);
+	} else if(node->type == NODE_TYPE_STATEMENT_ELSE) {
+		codegen_generate_else_statement(node);
+	} else {
+		compiler_error(current_process, "Unexpected keyword compiler bug");
+	}
+}
+
+void _codegen_generate_if_statement(struct node* node, int end_label_id) {
+	int if_label_id = codegen_label_count();
+	codegen_generate_expressionable(node->stmt.if_stmt.cond_node, history_begin(0));
+	asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+	asm_push("cmp eax, 0");
+	asm_push("je .if_%i", if_label_id);
+	codegen_generate_body(node->stmt.if_stmt.body_node, history_begin(IS_ALONE_STATEMENT));
+	asm_push("jmp .if_end_%i", end_label_id);
+	asm_push(".if_%i:", if_label_id);
+	if(node->stmt.if_stmt.next) {
+		codegen_generate_else_or_else_if(node->stmt.if_stmt.next, end_label_id);
+	}
+}
+
+
+void codegen_generate_if_statement(struct node* node) {
+	int end_label_id = codegen_label_count();
+	_codegen_generate_if_statement(node, end_label_id);
+	asm_push(".if_end_%i:", end_label_id);
+}
+
+void codegen_generate_while_statement(struct node* node) {
+	codegen_begin_entry_exit_point();
+	int while_start_id = codegen_label_count();
+	int while_end_id = codegen_label_count();
+	asm_push(".while_start_%i:", while_start_id);
+	codegen_generate_expressionable(node->stmt.while_stmt.exp_node, history_begin(0));
+	asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+	asm_push("cmp eax, 0");
+	asm_push("je .while_end_%i", while_end_id);
+	codegen_generate_body(node->stmt.while_stmt.body_node, history_begin(IS_ALONE_STATEMENT));
+	asm_push("jmp .while_start_%i", while_start_id);
+	asm_push(".while_end_%i:", while_end_id);
+	codegen_end_entry_exit_point();
+}
+
+void codegen_generate_do_while_statement(struct node* node) {
+	codegen_begin_entry_exit_point();
+	int do_while_start_id = codegen_label_count();
+	asm_push(".do_while_start_%i:", do_while_start_id);
+	codegen_generate_body(node->stmt.do_while_stmt.body_node, history_begin(IS_ALONE_STATEMENT));
+	codegen_generate_expressionable(node->stmt.do_while_stmt.exp_node, history_begin(0));
+	asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+	asm_push("cmp eax, 0");
+	asm_push("jne .do_while_start_%i", do_while_start_id);
+	codegen_end_entry_exit_point();
+}
+
+void codegen_generate_for_statement(struct node* node) {
+	struct for_stmt* for_stmt = &node->stmt.for_stmt;
+	int for_loop_start_id = codegen_label_count();	
+	int for_loop_end_id = codegen_label_count();
+	if(for_stmt->init_node) {
+		codegen_generate_expressionable(for_stmt->init_node, history_begin(0));
+		asm_push_ins_pop_or_ignore("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+	}
+	asm_push("jmp .for_loop%i", for_loop_start_id);
+	codegen_begin_entry_exit_point();
+	if(for_stmt->loop_node) {
+		codegen_generate_expressionable(for_stmt->loop_node, history_begin(0));
+		asm_push_ins_pop_or_ignore("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+	}
+
+	asm_push(".for_loop%i:", for_loop_start_id);
+	if(for_stmt->condition_node) {
+		codegen_generate_expressionable(for_stmt->condition_node, history_begin(0));
+		asm_push_ins_pop_or_ignore("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+		asm_push("cmp eax, 0");
+		asm_push("je .for_loop_end%i", for_loop_end_id);
+	}
+
+	if(for_stmt->body_node) {
+		codegen_generate_body(for_stmt->body_node, history_begin(IS_ALONE_STATEMENT));
+	}
+
+	if(for_stmt->loop_node) {
+		codegen_generate_expressionable(for_stmt->loop_node, history_begin(0));
+		asm_push_ins_pop_or_ignore("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+	}
+	asm_push("jmp .for_loop%i", for_loop_start_id);
+	asm_push(".for_loop_end%i:", for_loop_end_id);
+	codegen_end_entry_exit_point();
+}
+
+void codegen_generate_switch_default_statement(struct node* node) {
+	asm_push("; DEFAULT CASE");
+	struct code_generator* generator = current_process->generator;
+	struct generator_switch_stmt* switch_stmt_data = &generator->_switch;
+	asm_push(".switch_stmt_%i_case_default:", switch_stmt_data->current.id);
+}
+
+void codegen_generate_switch_statement_case_jumps(struct node* node) {
+	vector_set_peek_pointer(node->stmt.switch_stmt.cases, 0);
+	struct parsed_switch_case* switch_case = vector_peek(node->stmt.switch_stmt.cases);
+	while(switch_case) {
+		asm_push("cmp eax, %i", switch_case->index);
+		asm_push("je .switch_stmt_%i_case_%i", codegen_switch_id(), switch_case->index);
+		switch_case = vector_peek(node->stmt.switch_stmt.cases);
+	}
+
+	if(node->stmt.switch_stmt.has_default_case) {
+		asm_push("jmp .switch_stmt_%i_case_default", codegen_switch_id());
+		return;
+	}
+	codegen_goto_exit_point_maintain_stack(node);
+}
+
+void codegen_generate_switch_statement(struct node* node) {
+	codegen_begin_entry_exit_point();
+	codegen_begin_switch_statement();
+	codegen_generate_expressionable(node->stmt.switch_stmt.exp, history_begin(0));
+	asm_push_ins_pop_or_ignore("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+
+	codegen_generate_switch_statement_case_jumps(node);
+	
+	codegen_generate_body(node->stmt.switch_stmt.body, history_begin(IS_ALONE_STATEMENT));
+	codegen_end_switch_statement();
+	codegen_end_entry_exit_point();
+}
+
+void codegen_generate_break_statement(struct node* node) {
+	codegen_goto_exit_point(node);
+}
+
+void codegen_generate_continue_statement(struct node* node) {
+	codegen_goto_entry_point(node);
+}
+
+void codegen_generate_switch_case_statement(struct node* node) {
+	struct node* case_stmt_exp = node->stmt._case.exp;
+	assert(case_stmt_exp->type == NODE_TYPE_NUMBER);
+	codegen_begin_case_statement(case_stmt_exp->llnum);
+	asm_push("; CASE %i", case_stmt_exp->llnum);
+	codegen_end_case_statement();
+}
+
 void codegen_generate_statement(struct node* node, struct history* history) {
   switch (node->type) {
     case NODE_TYPE_VARIABLE:
@@ -1566,6 +1778,42 @@ void codegen_generate_statement(struct node* node, struct history* history) {
 
 		case NODE_TYPE_STATEMENT_RETURN:
 			codegen_generate_statement_return(node);
+			break;
+
+		case NODE_TYPE_STATEMENT_IF:
+			codegen_generate_if_statement(node);
+			break;
+
+		case NODE_TYPE_STATEMENT_WHILE:
+			codegen_generate_while_statement(node);
+			break;
+
+		case NODE_TYPE_STATEMENT_DO_WHILE:
+			codegen_generate_do_while_statement(node);
+			break;
+
+		case NODE_TYPE_STATEMENT_FOR:
+			codegen_generate_for_statement(node);
+			break;
+
+		case NODE_TYPE_STATEMENT_BREAK:
+			codegen_generate_break_statement(node);
+			break;
+
+		case NODE_TYPE_STATEMENT_CONTINUE:
+			codegen_generate_continue_statement(node);
+			break;
+
+		case NODE_TYPE_STATEMENT_SWITCH:
+			codegen_generate_switch_statement(node);
+			break;
+
+		case NODE_TYPE_STATEMENT_CASE:
+			codegen_generate_switch_case_statement(node);
+			break;
+
+		case NODE_TYPE_STATEMENT_DEFAULT:
+			codegen_generate_switch_default_statement(node);
 			break;
   }
   codegen_discard_unused_stack();

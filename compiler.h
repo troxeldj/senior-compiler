@@ -181,6 +181,15 @@ struct string_table_element {
 };
 
 struct code_generator {
+	struct generator_switch_stmt {
+		struct generator_switch_stmt_entity {
+			int id;
+		} current;
+		
+		// vector of generator switch_stmt_entity
+		struct vector* switches;
+	} _switch;
+
   // vector of struct string_table_element*
   struct vector* string_table;
 
@@ -1003,6 +1012,7 @@ void make_bracket_node(struct node* node);
 void make_body_node(struct vector* body_vec, size_t size, bool padded,
                     struct node* largest_var_node);
 void make_struct_node(const char* name, struct node* body_node);
+void make_default_node();
 void make_union_node(const char* name, struct node* body_node);
 void make_function_node(struct datatype* ret_type, const char* name,
                         struct vector* arguments, struct node* body_node);
