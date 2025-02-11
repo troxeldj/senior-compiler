@@ -40,8 +40,11 @@ I would compile this code with
 ## Command Line Arguments
 
 Other command line arguments:
+
 Positional Arg 1 (shown above): Input File Name
+
 Positional Arg 2: Output File Name
+
 Positional Arg 3: option
 	- exec: will compile to ASM and run the output assembly with nasm using elf32 format (default)
 	- object: will only compile to ASM (object)
