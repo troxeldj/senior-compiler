@@ -46,8 +46,8 @@ Positional Arg 1 (shown above): Input File Name
 Positional Arg 2: Output File Name
 
 Positional Arg 3: option
-	- exec: will compile to ASM and run the output assembly with nasm using elf32 format (default)
-	- object: will only compile to ASM (object)
+- exec: will compile to ASM and run the output assembly with nasm using elf32 format (default)
+- object: will only compile to ASM (object)
 
 
 More options will come with development
