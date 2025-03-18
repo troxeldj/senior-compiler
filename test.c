@@ -1,5 +1,3 @@
-
-
 struct dog a;
 int main () {
 	int x = 1;
