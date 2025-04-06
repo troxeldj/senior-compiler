@@ -81,6 +81,10 @@ enum {
   NUMBER_TYPE_DOUBLE
 };
 
+enum {
+	TOKEN_FLAG_IS_CUSTOM_OPERATOR = 0b00000001,
+};
+
 struct token {
   int type;
   int flags;
@@ -994,6 +998,7 @@ int align_value_treat_positive(int val, int to);
 int compute_sum_padding(struct vector* vec);
 
 bool token_is_operator(struct token* token, const char* val);
+bool is_operator_token(struct token* token);
 
 struct node* node_create(struct node* _node);
 
@@ -1299,4 +1304,38 @@ struct resolver_entity* resolver_result_entity_next(
 struct resolver_entity* resolver_new_entity_for_var_node(
     struct resolver_process* process, struct node* var_node, void* private,
     int offset);
+
+// expressionable functions
+
+void* expressionable_node_peek_or_null(struct expressionable* expressionable);
+struct expressionable_callbacks* expressionable_callbacks(struct expressionable* expressionable);
+struct token* expressionable_peek_next(struct expressionable* expressionable);
+bool expressionable_token_next_is_operator(struct expressionable* expressionable, const char* op);
+void expressionable_init(struct expressionable* expressionable, struct vector* token_vector, struct vector* node_vector, struct expressionable_config* config, int flags);
+struct expressionable* expressionable_create(struct expressionable_config* config, struct vector* token_vector, struct vector* node_vector, int flags);
+int expressionable_parse_number(struct expressionable* expressionable);
+int expressionable_parse_identifier(struct expressionable* expressionable);
+int expressionable_parser_get_precedence_for_operator(const char* op, struct expressionable_op_precedence_group** group_out);
+bool expressionable_parser_left_op_has_priority(struct expressionable* expressionable, const char* left_op, const char* right_op);
+void expressionable_parser_node_shift_children_left(struct expressionable* expressionable, void* node);
+void expressionable_parser_reorder_expression(struct expressionable* expressionable, void** node_out);
+bool expressionable_generic_type_is_value_expressionable(int type);
+void expressionable_expect_op(struct expressionable* expressionable, const char* op);
+void expressionable_expect_sym(struct expressionable* expressionable, char c);
+void expressionable_deal_with_additional_expression(struct expressionable* expressionable);
+void expressionable_parse_parenthesis(struct expressionable* expressionable);
+void expressionable_parse_for_normal_unary(struct expressionable* expressionable);
+int expression_get_pointer_depth(struct expressionable* expressionable);
+void expressionable_parse_for_unary_indirection(struct expressionable* expressionable);
+void expressionable_parse_unary(struct expressionable* expressionable);
+void expressionable_parse_for_operator(struct expressionable* expressionable);
+void expressionable_parse_ternary(struct expressionable* expressionable);
+int expressionable_parse_expression(struct expressionable* expressionable, struct token* token);
+int expressionable_parse_token(struct expressionable* expressionable, struct token* token, int flags);
+void* expressionable_node_pop(struct expressionable* expressionable);
+void expressionable_node_push(struct expressionable* expressionable, void* node_ptr);
+struct token* expressionable_token_next(struct expressionable* expressionable);
+int expressionable_parse_single_with_flags(struct expressionable* expressionable, int flags);
+int expressionable_parse_single(struct expressionable* expressionable);
+void expressionable_parse(struct expressionable* expressionable);
 #endif
