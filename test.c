@@ -1,4 +1,4 @@
-#define ABC 50
+#define ABC(x, y)
 
 int main () {
 	return 0;

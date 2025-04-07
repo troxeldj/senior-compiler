@@ -210,6 +210,23 @@ struct token* preprocessor_next_token(struct compile_process* compiler) {
 	return vector_peek(compiler->token_vec_original);
 }
 
+struct token* preprocessor_previous_token(struct compile_process* compiler) {
+	return vector_peek_at(compiler->token_vec_original, compiler->token_vec_original->pindex -1);
+}
+
+struct token* preprocessor_next_token_no_increment(struct compile_process* compiler) {
+	return vector_peek_no_increment(compiler->token_vec_original);
+}
+
+struct token* preprocessor_peek_next_token_skip_nl(struct compile_process* compiler) {
+	struct token* token = preprocessor_next_token_no_increment(compiler);
+	while(token && token->type == TOKEN_TYPE_NEWLINE) {
+		token = preprocessor_next_token(compiler);
+	}
+	token = preprocessor_next_token_no_increment(compiler);
+	return token;
+}
+
 void* preprocessor_handle_number_token(struct expressionable* expressionable) {
 	struct token* token = expressionable_token_next(expressionable);
 	return preprocessor_node_create(&(struct preprocessor_node){.type = PREPROCESSOR_NUMBER_NODE, .const_val.llnum = token->llnum});
@@ -421,10 +438,53 @@ struct preprocessor_definition* preprocessor_definition_create(const char* name,
 	return definition;
 }
 
+
+bool preprocessor_is_next_macro_arguments(struct compile_process* compiler) {
+	bool res = false;
+	vector_save(compiler->token_vec_original);
+	struct token* last_token = preprocessor_previous_token(compiler);
+	struct token* current_token = preprocessor_next_token(compiler);	
+	
+	if(token_is_operator(current_token, "(") && (!last_token || !last_token->whitespace)) {
+		res = true;
+	}
+
+	vector_restore(compiler->token_vec_original);
+	return res;
+}
+
+void preprocessor_parse_macro_argument_declaration(struct compile_process* compiler, struct vector* arguments) {
+	if(token_is_operator(preprocessor_next_token_no_increment(compiler), "(")) {
+		// skip '('
+		preprocessor_next_token(compiler);
+		struct token* next_token = preprocessor_next_token(compiler);
+		while(!token_is_symbol(next_token, ')')) {
+			if(next_token->type != TOKEN_TYPE_IDENTIFIER) {
+				compiler_error(compiler, "Must provide a valid identifier in preprocessor definition\n");
+			}
+			vector_push(arguments, (void*)next_token->sval);
+			next_token = preprocessor_next_token(compiler);
+			if(!token_is_operator(next_token, ",") && !token_is_symbol(next_token, ')')) {
+				compiler_error(compiler, "Incomplete sequence for macro arguments\n");
+			}
+
+			if(token_is_symbol(next_token, ')')) {
+				break;
+			}
+			
+			// skip comma
+			next_token = preprocessor_next_token(compiler);
+		}
+	}
+}
+
 void preprocessor_handle_definition_token(struct compile_process* compiler) {
 	struct token* name_token = preprocessor_next_token(compiler);
 	struct vector* arguments = vector_create(sizeof(const char*));
-	#warning "handle macro argument declarations"
+
+	if(preprocessor_is_next_macro_arguments(compiler)) {
+		preprocessor_parse_macro_argument_declaration(compiler, arguments);
+	}
 
 	struct vector* value_token_vec = vector_create(sizeof(struct token));
 	preprocessor_multi_value_insert_to_vector(compiler, value_token_vec);
