@@ -77,13 +77,14 @@ struct preprocessor_node {
 		};
 		const char* sval;
 };
+void preprocessor_handle_token(struct compile_process* compiler, struct token* token);
 
 void preprocessor_execute_warning(struct compile_process* compiler, const char* msg) {
-	compiler_error(compiler, "Preprocessor Warning: %s\n", msg);
+	compiler_warning(compiler, "#warning: %s", msg);
 }
 
 void preprocessor_execute_error(struct compile_process* compiler, const char* msg) {
-	compiler_error(compiler, "Preprocessor Error: %s\n", msg);
+	compiler_error(compiler, "#error: %s", msg);
 }
 
 struct preprocessor_included_file* preprocessor_add_included_file(struct preprocessor* preprocessor, const char* filename) {
@@ -363,13 +364,13 @@ struct expressionable_config preprocessor_expressionable_config = {
 	.callbacks.expecting_additional_node = preprocessor_expecting_additional_node,
 	.callbacks.is_custom_operator = preprocessor_is_custom_operator
 };
-
 bool preprocessor_is_preprocessor_keyword(const char* value) {
 	return S_EQ(value, "define") ||
 		S_EQ(value, "undef") ||
 		S_EQ(value, "warning") ||
+		S_EQ(value, "error") ||
 		S_EQ(value, "if") ||
-		S_EQ(value, "elseif") ||
+		S_EQ(value, "elif") ||
 		S_EQ(value, "ifdef") ||
 		S_EQ(value, "ifndef") ||
 		S_EQ(value, "endif") ||
@@ -388,6 +389,60 @@ bool preprocessor_token_is_define(struct token* token) {
 	}
 
 	return (S_EQ(token->sval, "define"));
+}
+
+bool preprocessor_token_is_undef(struct token* token) {
+	if(!preprocessor_token_is_preprocessor_keyword(token)) {
+		return false;
+	}
+
+	return (S_EQ(token->sval, "undef"));
+}
+
+bool preprocessor_token_is_warning(struct token* token) {
+	if(!preprocessor_token_is_preprocessor_keyword(token)) {
+		return false;
+	}
+
+	return (S_EQ(token->sval, "warning"));
+}
+
+bool preprocessor_token_is_error(struct token* token) {
+	if(!preprocessor_token_is_preprocessor_keyword(token)) {
+		return false;
+	}
+
+	return (S_EQ(token->sval, "error"));
+}
+
+bool preprocessor_token_is_ifdef(struct token* token) {
+	if(!preprocessor_token_is_preprocessor_keyword(token)) {
+		return false;
+	}
+
+	return (S_EQ(token->sval, "ifdef"));
+}
+
+struct buffer* preprocessor_multi_value_string(struct compile_process* compiler) {
+	struct buffer* buffer = buffer_create();
+	struct token* value_token = preprocessor_next_token(compiler);
+	while(value_token) {
+		if (value_token->type == TOKEN_TYPE_NEWLINE)
+		{
+			break;
+		}
+
+		if (token_is_symbol(value_token, '\\')) {
+			// Skip the new line
+			preprocessor_next_token(compiler);
+			value_token = preprocessor_next_token(compiler);
+			continue;
+		}
+
+		buffer_printf(buffer, "%s", value_token->sval);
+		value_token = preprocessor_next_token(compiler);
+	}
+	return buffer;
 }
 
 void preprocessor_multi_value_insert_to_vector(struct compile_process* compiler, struct vector* value_token_vec) {
@@ -436,6 +491,18 @@ struct preprocessor_definition* preprocessor_definition_create(const char* name,
 
 	vector_push(preprocessor->definitions, &definition);
 	return definition;
+}
+
+struct preprocessor_definition* preprocessor_get_definition(struct preprocessor* preprocessor, const char* name) {
+	vector_set_peek_pointer(preprocessor->definitions, 0);
+	struct preprocessor_definition* current_def = vector_peek_ptr(preprocessor->definitions);
+	while(current_def) {
+		if(S_EQ(current_def->name, name)) {
+			break;
+		}
+		current_def = vector_peek_ptr(preprocessor->definitions);
+	}
+	return current_def;
 }
 
 
@@ -493,6 +560,88 @@ void preprocessor_handle_definition_token(struct compile_process* compiler) {
 	preprocessor_definition_create(name_token->sval, value_token_vec, arguments, preprocessor);
 }
 
+void preprocessor_handle_undef_token(struct compile_process* compiler) {
+	struct token* name_token = preprocessor_next_token(compiler);
+	preprocessor_definition_remove(compiler->preprocessor, name_token->sval);
+}
+
+void preprocessor_handle_warning_token(struct compile_process* compiler) {
+	struct buffer* str_buf = preprocessor_multi_value_string(compiler);
+	preprocessor_execute_warning(compiler, buffer_ptr(str_buf));
+}
+
+void preprocessor_handle_error_token(struct compile_process* compiler) {
+	struct buffer* str_buf = preprocessor_multi_value_string(compiler);
+	preprocessor_execute_error(compiler, buffer_ptr(str_buf));
+}
+
+struct token* preprocessor_hashtag_and_identifier(struct compile_process* compiler, const char* str) {
+	if(!preprocessor_next_token_no_increment(compiler)) {
+		return NULL;
+	}
+
+	if(!token_is_symbol(preprocessor_next_token_no_increment(compiler), '#')) {
+		return NULL;
+	}
+	vector_save(compiler->token_vec_original);
+	// skip the '#'
+	preprocessor_next_token(compiler);
+
+	struct token* target_token = preprocessor_next_token_no_increment(compiler);
+	if((token_is_identifier(target_token) && S_EQ(target_token->sval, str)) || token_is_keyword(target_token, str)) {
+		preprocessor_next_token(compiler);
+
+		vector_save_purge(compiler->token_vec_original);
+		return target_token;
+	}
+	vector_restore(compiler->token_vec_original);
+	return NULL;
+}
+
+// returns true if their is a hashtag and any preprocessor if stmt
+bool preprocessor_is_hashtag_and_any_starting_if(struct compile_process* compiler) {
+	return preprocessor_hashtag_and_identifier(compiler, "if") ||
+		preprocessor_hashtag_and_identifier(compiler, "ifdef") ||
+		preprocessor_hashtag_and_identifier(compiler, "ifndef") ||
+		preprocessor_hashtag_and_identifier(compiler, "elif");
+}
+
+void preprocessor_skip_to_endif(struct compile_process* compiler) {
+	while(!preprocessor_hashtag_and_identifier(compiler, "endif")) {
+		if(preprocessor_is_hashtag_and_any_starting_if(compiler)) {
+			preprocessor_skip_to_endif(compiler);
+			continue;
+		}
+		preprocessor_next_token(compiler);
+	}
+}
+
+void preprocessor_read_to_endif(struct compile_process* compiler, bool true_clause) {
+	while(preprocessor_next_token_no_increment(compiler)&& !preprocessor_hashtag_and_identifier(compiler, "endif")) {
+		if(true_clause) {
+			preprocessor_handle_token(compiler, preprocessor_next_token(compiler));
+			continue;
+		}
+		// Skip unexpected token
+		preprocessor_next_token(compiler);
+
+		if(preprocessor_is_hashtag_and_any_starting_if(compiler)) {
+			preprocessor_skip_to_endif(compiler);
+		}
+	}
+
+}
+
+void preprocessor_handle_ifdef_token(struct compile_process* compiler) {
+	struct token* condition_token = preprocessor_next_token(compiler);
+	if(!condition_token) {
+		compiler_error(compiler, "Expecting a condition token for ifdef statement\n");
+	}
+	struct preprocessor_definition* definition = preprocessor_get_definition(compiler->preprocessor, condition_token->sval);
+	preprocessor_read_to_endif(compiler, definition != NULL);
+}
+
+
 int preprocessor_handle_hashtag_token(struct compile_process* compiler, struct token* token) {
 	bool is_preprocessed = false;
 	struct token* next_token = preprocessor_next_token(compiler);
@@ -500,8 +649,20 @@ int preprocessor_handle_hashtag_token(struct compile_process* compiler, struct t
 		// handle definition token
 		preprocessor_handle_definition_token(compiler);
 		is_preprocessed = true;
+	} else if (preprocessor_token_is_undef(next_token)) {
+		preprocessor_handle_undef_token(compiler);
+		is_preprocessed = true;
+	} else if (preprocessor_token_is_warning(next_token)) {
+		preprocessor_handle_warning_token(compiler);
+		is_preprocessed = true;
+	} else if (preprocessor_token_is_error(next_token)) {
+		preprocessor_handle_error_token(compiler);
+		is_preprocessed = true;
+	} else if (preprocessor_token_is_ifdef(next_token)) {
+		// handle ifdef token
+		preprocessor_handle_ifdef_token(compiler);
+		is_preprocessed = true;
 	}
-
 	return is_preprocessed;
 }
 

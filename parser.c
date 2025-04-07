@@ -1024,7 +1024,6 @@ void parse_symbol() {
     struct history *history = history_begin(HISTORY_FLAG_IS_GLOBAL_SCOPE);
     parse_body(&variable_size, history);
     struct node *body_node = node_pop();
-
     node_push(body_node);
   } else if (token_next_is_symbol(':')) {
     parse_label(history_begin(0));

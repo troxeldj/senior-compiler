@@ -13,7 +13,7 @@ void compiler_error(struct compile_process* compiler, const char* msg, ...) {
   vfprintf(stderr, msg, args);
   va_end(args);
 
-  fprintf(stderr, "on line %i, col %i in file %s\n", compiler->pos.line, compiler->pos.col, compiler->pos.fileName);
+  fprintf(stderr, " on line %i, col %i in file %s\n", compiler->pos.line, compiler->pos.col, compiler->pos.fileName);
   exit(-1);
 }
 
@@ -23,7 +23,7 @@ void compiler_warning(struct compile_process* compiler, const char* msg, ...) {
   vfprintf(stderr, msg, args);
   va_end(args);
 
-  fprintf(stderr, "on line %i, col %i in file %s\n", compiler->pos.line, compiler->pos.col, compiler->pos.fileName);
+  fprintf(stderr, " on line %i, col %i in file %s\n", compiler->pos.line, compiler->pos.col, compiler->pos.fileName);
 }
 
 int compile_file(const char* filename, const char* out_filename, int flags) {

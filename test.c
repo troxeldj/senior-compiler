@@ -1,5 +1,4 @@
-#define ABC(x, y)
-
-int main () {
-	return 0;
-}
+#define ABC 1
+#ifdef ABC
+#error "testing"
+#endif
