@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <linux/limits.h>
 
 #define S_EQ(str, str2) (str && str2 && (strcmp(str, str2) == 0))
 
@@ -208,6 +209,85 @@ struct code_generator {
 };
 
 struct resolver_process;
+struct preprocessor;
+struct preprocessor_definition;
+struct preprocessor_function_argument;
+struct preprocessor_included_file;
+
+typedef void (*PREPROCESSOR_STATIC_INCLUDE_HANDLER_POST_CREATION)(struct preprocessor* preprocessor, struct preprocessor_included_file* included_file);
+
+enum {
+	PREPROCESSOR_DEFINITITION_STANDARD,
+	PREPROCESSOR_DEFINITITION_MACRO_FUNCTION,
+	PREPROCESSOR_DEFINITITION_NATIVE_CALLBACK,
+	PREPROCESSOR_DEFINITITION_TYPEDEF,
+};
+
+struct preprocessor_function_argument {
+	// vector of struct token* 
+	struct vector* tokens;
+};
+
+struct preprocessor_function_arguments {
+	// vector of struct preprocessor_function_arugment
+	struct vector* arguments;
+};
+
+typedef int (*PREPROCESSOR_DEFINITION_NATIVE_CALL_EVALUATE)(struct preprocessor_definition* definition, struct preprocessor_function_arguments* arguments);
+typedef struct vector* (*PREPROCESSOR_DEFINITION_NATIVE_CALL_VALUE)(struct preprocessor_definition* definition, struct preprocessor_function_arguments* arguments);
+
+struct preprocessor_definition {
+	// i.e standard or macro function
+	int type;
+
+	// The name
+	const char* name;
+
+	union {
+		struct standard_preprocessor_definition {
+			// vector of definition value tokens (struct token)
+			struct vector* value;
+
+			// vector of const char* representing function arugments in order
+			struct vector* arguments;
+		} standard;
+
+		struct typedef_preprocessor_definition {
+			struct vector* value;
+		} _typedef;
+
+		struct native_callback_preprocessor_definition {
+			PREPROCESSOR_DEFINITION_NATIVE_CALL_EVALUATE evaluate;
+			PREPROCESSOR_DEFINITION_NATIVE_CALL_VALUE value;
+		} native;
+	};
+
+	struct preprocessor* preprocessor;
+	
+};
+
+struct preprocessor_included_file {
+	char filename[PATH_MAX];
+};
+
+struct preprocessor {
+	// vector of struct preprocessor_definition*
+	struct vector* definitions;
+
+	// vector of struct preprocessor_node*
+	struct vector* exp_vector;
+
+	struct expressionable* expressionable;
+
+	struct compile_process* compiler;
+	
+	// vector of included files (struct preprocessor_included_file*)
+	struct vector* includes;
+};
+
+// preprocessor functions
+struct preprocessor* preprocessor_create(struct compile_process* compiler);
+int preprocessor_run(struct compile_process* compiler);
 
 struct compile_process {
   // flags in regards to how this file should be compiled
@@ -219,6 +299,8 @@ struct compile_process {
     const char* abs_path;
   } cfile;
 
+	// Contains definition and tokens, this is before preprocessing	
+  struct vector* token_vec_original;
   // A vector of tokens from lexical analysis
   struct vector* token_vec;
   struct vector* node_vec;
@@ -241,6 +323,9 @@ struct compile_process {
 
   struct code_generator* generator;
   struct resolver_process* resolver;
+	// vector of const char * that represents the include directories
+	struct vector* include_dirs;
+	struct preprocessor* preprocessor;
 };
 
 enum { PARSE_ALL_OK, PARSE_GENERAL_ERROR };
@@ -927,11 +1012,7 @@ enum {
 };
 
 int compile_file(const char* filename, const char* out_filename, int flags);
-
-struct compile_process* compile_process_create(const char* filename,
-                                               const char* filename_out,
-                                               int flags);
-
+struct compile_process* compile_process_create(const char* filename, const char* filename_out, int flags, struct compile_process* parent_process);
 char compile_process_next_char(struct lex_process* lex_process);
 char compile_process_peek_char(struct lex_process* lex_process);
 void compile_process_push_char(struct lex_process* lex_process, char c);
@@ -1338,4 +1419,6 @@ struct token* expressionable_token_next(struct expressionable* expressionable);
 int expressionable_parse_single_with_flags(struct expressionable* expressionable, int flags);
 int expressionable_parse_single(struct expressionable* expressionable);
 void expressionable_parse(struct expressionable* expressionable);
+
+
 #endif
