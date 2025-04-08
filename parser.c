@@ -325,9 +325,9 @@ void parser_reorder_expression(struct node **node_out) {
       parser_reorder_expression(&node->exp.right);
     }
   }
-
-  if ((is_array_node(node->exp.left) || is_node_assignment(node->exp.right)) ||
-      ((node_is_expression(node->exp.left, "()")) &&
+  if ((is_array_node(node->exp.left) && is_node_assignment(node->exp.right)) ||
+      ((node_is_expression(node->exp.left, "()") ||
+        node_is_expression(node->exp.left, "[]")) &&
        node_is_expression(node->exp.right, ","))) {
     parser_node_move_right_left_to_left(node);
   }
@@ -337,7 +337,7 @@ bool parser_is_unary_operator(const char *op) { return is_unary_operator(op); }
 
 void parse_for_indirection_unary() {
   int depth = parser_get_pointer_depth();
-  parse_expressionable(history_begin(0));
+  parse_expressionable(history_begin(EXPRESSION_IS_UNARY));
   struct node *unary_operand_node = node_pop();
   make_unary_node("*", unary_operand_node);
 
@@ -348,7 +348,7 @@ void parse_for_indirection_unary() {
 
 void parse_for_normal_unary() {
   const char *unary_op = token_next()->sval;
-  parse_expressionable(history_begin(0));
+  parse_expressionable(history_begin(EXPRESSION_IS_UNARY));
   struct node *unary_operand_node = node_pop();
   make_unary_node(unary_op, unary_operand_node);
 }
@@ -491,6 +491,9 @@ void parse_for_cast() {
   make_cast_node(&dtype, operand_node);
 }
 int parse_exp(struct history *history) {
+	if(history->flags & EXPRESSION_IS_UNARY && !unary_operand_compatible(token_peek_next())) {
+		return -1;
+	}
   if (S_EQ(token_peek_next()->sval, "(")) {
     parse_for_parentheses(history);
   } else if (S_EQ(token_peek_next()->sval, "[")) {
@@ -920,7 +923,8 @@ void make_variable_node_and_register(struct history *history,
   parser_scope_push(parser_new_scope_entity(var_node, var_node->var.aoffset, 0),
                     var_node->var.type.size);
 
-	resolver_default_new_scope_entity(current_process->resolver, var_node, var_node->var.aoffset, 0);
+  resolver_default_new_scope_entity(current_process->resolver, var_node,
+                                    var_node->var.aoffset, 0);
 
   node_push(var_node);
 }
@@ -987,7 +991,7 @@ void parse_function(struct datatype *ret_type, struct token *name_token,
                     struct history *history) {
   struct vector *arguments_vector = NULL;
   parser_scope_new();
-	resolver_default_new_scope(current_process->resolver, 0);
+  resolver_default_new_scope(current_process->resolver, 0);
   make_function_node(ret_type, name_token->sval, NULL, NULL);
   struct node *function_node = node_peek();
   parser_current_function = function_node;
@@ -1014,7 +1018,7 @@ void parse_function(struct datatype *ret_type, struct token *name_token,
   }
 
   parser_current_function = NULL;
-	resolver_default_finish_scope(current_process->resolver);
+  resolver_default_finish_scope(current_process->resolver);
   parser_scope_finish();
 }
 
@@ -1212,7 +1216,7 @@ void parse_body_multiple_statements(size_t *variable_size,
  */
 void parse_body(size_t *variable_size, struct history *history) {
   parser_scope_new();
-	resolver_default_new_scope(current_process->resolver, 0);
+  resolver_default_new_scope(current_process->resolver, 0);
   size_t tmp_size = 0x00;
   if (!variable_size) {
     variable_size = &tmp_size;
@@ -1221,14 +1225,14 @@ void parse_body(size_t *variable_size, struct history *history) {
   struct vector *body_vec = vector_create(sizeof(struct node *));
   if (!token_next_is_symbol('{')) {
     parse_body_single_statement(variable_size, body_vec, history);
-		resolver_default_finish_scope(current_process->resolver);
+    resolver_default_finish_scope(current_process->resolver);
     parser_scope_finish();
     return;
   }
 
   // We have some statements between curly braces { int a; int b; int c; }
   parse_body_multiple_statements(variable_size, body_vec, history);
-	resolver_default_finish_scope(current_process->resolver);
+  resolver_default_finish_scope(current_process->resolver);
   parser_scope_finish();
 
   if (variable_size) {
@@ -1304,12 +1308,12 @@ void parse_union(struct datatype *dtype) {
   bool is_forward_declaration = !token_is_symbol(token_peek_next(), '{');
   if (!is_forward_declaration) {
     parser_scope_new();
-		resolver_default_new_scope(current_process->resolver, 0);
+    resolver_default_new_scope(current_process->resolver, 0);
   }
   parse_union_no_scope(dtype, is_forward_declaration);
 
   if (!is_forward_declaration) {
-		resolver_default_finish_scope(current_process->resolver);
+    resolver_default_finish_scope(current_process->resolver);
     parser_scope_finish();
   }
 }
@@ -1318,12 +1322,12 @@ void parse_struct(struct datatype *dtype) {
   bool is_forward_declaration = !token_is_symbol(token_peek_next(), '{');
   if (!is_forward_declaration) {
     parser_scope_new();
-		resolver_default_new_scope(current_process->resolver, 0);
+    resolver_default_new_scope(current_process->resolver, 0);
   }
   parse_struct_no_new_scope(dtype, is_forward_declaration);
 
   if (!is_forward_declaration) {
-		resolver_default_finish_scope(current_process->resolver);
+    resolver_default_finish_scope(current_process->resolver);
     parser_scope_finish();
   }
 }
@@ -1501,11 +1505,11 @@ void parse_keyword_parentheses_expression(const char *keyword) {
   expect_sym(')');
 }
 
-void parse_default(struct history* history) {
-	expect_keyword("default");
-	expect_sym(':');
-	make_default_node();
-	history->_switch.case_data.has_default_case = true;
+void parse_default(struct history *history) {
+  expect_keyword("default");
+  expect_sym(':');
+  make_default_node();
+  history->_switch.case_data.has_default_case = true;
 }
 
 void parse_case(struct history *history) {
@@ -1711,9 +1715,9 @@ void parse_keyword(struct history *history) {
     parse_case(history);
     return;
   } else if (S_EQ(token->sval, "default")) {
-		parse_default(history);
-		return;
-	}
+    parse_default(history);
+    return;
+  }
 
   compiler_error(current_process, "Invalid keyword\n");
 }
@@ -1740,8 +1744,7 @@ int parse_expressionable_single(struct history *history) {
       break;
 
     case TOKEN_TYPE_OPERATOR:
-      parse_exp(history);
-      res = 0;
+      res = parse_exp(history);
       break;
 
     case TOKEN_TYPE_KEYWORD:
@@ -1764,14 +1767,14 @@ void parse_expressionable(struct history *history) {
 void parse_keyword_for_global() {
   parse_keyword(history_begin(HISTORY_FLAG_IS_GLOBAL_SCOPE));
   struct node *node = node_pop();
-	switch(node->type) {
-		case NODE_TYPE_VARIABLE:
-		case NODE_TYPE_FUNCTION:
-		case NODE_TYPE_STRUCT:
-		case NODE_TYPE_UNION:
-			symresolver_build_for_node(current_process, node);
-		break;
-	}
+  switch (node->type) {
+    case NODE_TYPE_VARIABLE:
+    case NODE_TYPE_FUNCTION:
+    case NODE_TYPE_STRUCT:
+    case NODE_TYPE_UNION:
+      symresolver_build_for_node(current_process, node);
+      break;
+  }
   node_push(node);
 }
 

@@ -66,6 +66,7 @@ void codegen_generate_entity_access_for_unary_get_address(
     struct resolver_result* result, struct resolver_entity* entity);
 void codegen_generate_entity_access_for_unsupported(struct resolver_result* result, struct resolver_entity* entity);
 void codegen_generate_body(struct node* node, struct history* history);
+int codegen_remove_uninheritable_flags(int flags);
 
 void codegen_response_expect() {
   struct response* res = calloc(1, sizeof(struct response));
@@ -521,8 +522,31 @@ void codegen_generate_global_variable_for_struct(struct node* node) {
            asm_keyword_for_size(variable_size(node), tmp_buf));
 }
 
+void codegen_generate_global_variable_for_union(struct node* node) {
+  if (node->var.value != NULL) {
+    compiler_error(current_process, "Don't support values for structures\n");
+    return;
+  }
+  char tmp_buf[256];
+  asm_push("%s: %s 0", node->var.name,
+           asm_keyword_for_size(variable_size(node), tmp_buf));
+}
+
+void codegen_generate_variable_for_array(struct node* node) {
+	if(node->var.value != NULL) {
+		compiler_error(current_process, "Don't support values for arrays\n");
+		return;
+	}
+	char tmp_buf[256];
+	asm_push("%s: %s 0", node->var.name,
+			asm_keyword_for_size(variable_size(node), tmp_buf));
+}
+
 void codegen_generate_global_variable(struct node* node) {
   asm_push("; %s %s", node->var.type.type_str, node->var.name);
+	if(node->var.type.flags & DATATYPE_FLAG_IS_ARRAY) {
+		codegen_generate_variable_for_array(node);
+	}
   switch (node->var.type.type) {
     case DATA_TYPE_VOID:
     case DATA_TYPE_CHAR:
@@ -536,6 +560,10 @@ void codegen_generate_global_variable(struct node* node) {
       codegen_generate_global_variable_for_struct(node);
       break;
 
+		case DATA_TYPE_UNION:
+			codegen_generate_global_variable_for_union(node);
+			break;
+
     case DATA_TYPE_FLOAT:
     case DATA_TYPE_DOUBLE:
       compiler_error(
@@ -543,12 +571,30 @@ void codegen_generate_global_variable(struct node* node) {
           "Doubles and floats are not supported in our subset of c\n");
       break;
   }
+	assert(node->type == NODE_TYPE_VARIABLE);
+	codegen_new_scope_entity(node, 0, 0);
 }
 
 void codegen_generate_struct(struct node* node) {
   if (node->flags & NODE_FLAG_HAS_VARIABLE_COMBINED) {
     codegen_generate_global_variable(node->_struct.var);
   }
+}
+
+void codegen_generate_union(struct node* node) {
+	if(node->flags & NODE_FLAG_HAS_VARIABLE_COMBINED) {
+		codegen_generate_global_variable(node->_union.var);
+	}
+}
+
+void codegen_generate_global_var_list(struct node* node) {
+	assert(node->type == NODE_TYPE_VARIABLE_LIST);
+	vector_set_peek_pointer(node->var_list.list, 0);
+	struct node* var_node = vector_peek_ptr(node->var_list.list);
+	while(var_node) {
+		codegen_generate_global_variable(var_node);
+		var_node = vector_peek_ptr(node->var_list.list);
+	}
 }
 
 void codegen_generate_data_section_part(struct node* node) {
@@ -558,9 +604,17 @@ void codegen_generate_data_section_part(struct node* node) {
       codegen_generate_global_variable(node);
       break;
 
+		case NODE_TYPE_VARIABLE_LIST:
+			codegen_generate_global_var_list(node);
+			break;
+
     case NODE_TYPE_STRUCT:
       codegen_generate_struct(node);
       break;
+
+		case NODE_TYPE_UNION:
+			codegen_generate_union(node);
+			break;
 
     default:
       break;
@@ -606,12 +660,12 @@ bool codegen_is_exp_root(struct history* history) {
 }
 
 void codegen_reduce_register(const char* reg, size_t size, bool is_signed) {
-  if (size != DATA_SIZE_DWORD) {
+  if (size != DATA_SIZE_DWORD && size > 0) {
     const char* ins = "movsx";
     if (!is_signed) {
       ins = "movzx";
     }
-    asm_push("%s eax, %s", codegen_sub_register("eax", size));
+    asm_push("%s eax, %s", ins, codegen_sub_register("eax", size));
   }
 }
 
@@ -767,6 +821,61 @@ void codegen_generate_unary(struct node* node, struct history* history) {
   codegen_generate_normal_unary(node, history);
 }
 
+void codegen_gen_mov_for_value(const char* reg, const char* value,
+															const char* datatype, int flags) {
+	asm_push("mov %s, %s", reg, value);
+}
+
+void codegen_generate_string(struct node* node, struct history* history) {
+	const char* label = codegen_register_string(node->sval);
+	codegen_gen_mov_for_value("eax", label, "dword", history->flags);
+	asm_push_ins_push_with_data(
+		"eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,
+		&(struct stack_frame_data){.dtype = datatype_for_string()});
+}
+
+void codegen_generate_expression_paren_node(struct node* node, struct history* history) {
+	codegen_generate_expressionable(node->parentheses.exp, history_down(history, codegen_remove_uninheritable_flags(history->flags)));
+}
+
+void codegen_generate_ternary(struct node* node, struct history* history) {
+	int true_label_id = codegen_label_count();
+	int false_label_id = codegen_label_count();
+	int end_label_id = codegen_label_count();
+	struct datatype last_dtype;
+	assert(asm_datatype_back(&last_dtype));
+
+	asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+		"result_value");
+	asm_push("cmp eax, 0");
+	asm_push("je .ternary_false_%i", false_label_id);
+	asm_push(".ternary_true_%i:", true_label_id);
+
+	codegen_generate_expressionable(node->ternary.true_node, history_down(history, 0));
+	asm_push_ins_pop_or_ignore("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+		"result_value");
+	asm_push("jmp .ternary_end_%i", end_label_id);
+
+	asm_push(".ternary_false_%i:", false_label_id);
+	codegen_generate_expressionable(node->ternary.false_node, history_down(history, 0));
+	asm_push_ins_pop_or_ignore("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+		"result_value");
+	asm_push(".ternary_end_%i:", end_label_id);
+}
+
+void codegen_generate_cast(struct node* node, struct history* history) {
+	if(!codegen_resolve_node_for_value(node, history)) {
+		codegen_generate_expressionable(node->cast.operand, history);
+	}
+	asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+		"result_value");
+	codegen_reduce_register("eax", datatype_element_size(&node->cast.dtype),
+		node->cast.dtype.flags & DATATYPE_FLAG_IS_SIGNED);
+	asm_push_ins_push_with_data(
+		"eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,
+		&(struct stack_frame_data){.dtype = node->cast.dtype});	
+}
+
 void codegen_generate_expressionable(struct node* node,
                                      struct history* history) {
   bool is_root = codegen_is_exp_root(history);
@@ -783,13 +892,29 @@ void codegen_generate_expressionable(struct node* node,
       codegen_generate_number_node(node, history);
       break;
 
+		case NODE_TYPE_STRING:
+			codegen_generate_string(node, history);
+			break;
+
     case NODE_TYPE_EXPRESSION:
       codegen_generate_exp_node(node, history);
       break;
 
+		case NODE_TYPE_EXPRESSION_PARENTHESIS:
+			codegen_generate_expression_paren_node(node, history);
+			break;
+
+		case NODE_TYPE_TERNARY:
+			codegen_generate_ternary(node, history);
+			break;
+
     case NODE_TYPE_UNARY:
       codegen_generate_unary(node, history);
       break;
+
+		case NODE_TYPE_CAST:
+			codegen_generate_cast(node, history);
+			break;
   }
 }
 
@@ -855,11 +980,44 @@ const char* codegen_byte_word_or_dword_or_ddword(size_t size,
 void codegen_generate_assignment_instruction_for_operator(
     const char* mov_type_keyword, const char* address, const char* reg_to_use,
     const char* op, bool is_signed) {
+
+	assert(reg_to_use != "ecx");
   if (S_EQ(op, "=")) {
     asm_push("mov %s [%s], %s", mov_type_keyword, address, reg_to_use);
   } else if (S_EQ(op, "+=")) {
     asm_push("add %s [%s], %s", mov_type_keyword, address, reg_to_use);
-  }
+  } else if (S_EQ(op, "-=")) {
+		asm_push("sub %s [%s], %s", mov_type_keyword, address, reg_to_use);
+	} else if (S_EQ(op, "*=")) {
+		asm_push("mov ecx, %s", reg_to_use);
+		asm_push("mov eax, [%s]", address);
+		if(is_signed) {
+			asm_push("imul %s", reg_to_use);
+		} else {
+			asm_push("mul %s", reg_to_use);
+		}
+		asm_push("mov %s [%s], eax", mov_type_keyword, address);
+	} else if (S_EQ(op, "/=")) {
+		asm_push("mov ecx, eax");
+		asm_push("mov eax, [%s]", reg_to_use);
+		asm_push("cdq");
+		if(is_signed) {
+			asm_push("idiv ecx");
+		} else {
+			asm_push("div ecx");
+		}
+		asm_push("mov %s [%s], %s", mov_type_keyword, address, reg_to_use);
+	} else if(S_EQ(op, "<<=")) {
+		asm_push("mov ecx, %s", reg_to_use);
+		asm_push("sal %s [%s], cl", mov_type_keyword, address);
+	} else if(S_EQ(op, ">>=")) {
+		asm_push("mov ecx, %s", reg_to_use);
+		if(is_signed) {
+			asm_push("sar %s [%s], cl", mov_type_keyword, address);
+		} else {
+			asm_push("shr %s [%s], cl", mov_type_keyword, address);
+		}
+	} 
 }
 
 void codegen_generate_scope_variable(struct node* node) {
@@ -970,11 +1128,16 @@ void codegen_generate_entity_access_for_unsupported(struct resolver_result* resu
 	codegen_generate_expressionable(entity->node, history_begin(0));
 }
 
+void codegen_generate_entity_access_for_cast(struct resolver_result* result, struct resolver_entity* entity) {
+	asm_push("; CAST");
+}
+
 void codegen_generate_entity_access_for_entity_for_assignment_left_operand(
     struct resolver_result* result, struct resolver_entity* entity,
     struct history* history) {
   switch (entity->type) {
     case RESOLVER_ENTITY_TYPE_ARRAY_BRACKET:
+      codegen_generate_entity_access_for_variable_or_general(result, entity);
       break;
 
     case RESOLVER_ENTITY_TYPE_VARIABLE:
@@ -1000,6 +1163,7 @@ void codegen_generate_entity_access_for_entity_for_assignment_left_operand(
       break;
 
     case RESOLVER_ENTITY_TYPE_CAST:
+			codegen_generate_entity_access_for_cast(result, entity);
       break;
 
     default:
@@ -1154,11 +1318,47 @@ void codegen_generate_entity_access_for_unary_get_address(
       &(struct stack_frame_data){.dtype = entity->dtype});
 }
 
+void codegen_generate_entity_access_for_array_bracket_pointer(struct resolver_result* result, struct resolver_entity* entity) {
+	asm_push_ins_pop("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+									 "result_value");
+	codegen_generate_expressionable(entity->array.array_index_node, history_begin(0));
+	asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+	if(datatype_element_size(&entity->dtype) > DATA_SIZE_WORD) {
+		asm_push("imul eax, %i", datatype_size_for_array_access(&entity->dtype));
+	}
+	asm_push("add ebx, eax");
+	asm_push_ins_push_with_data(
+		"ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,
+		&(struct stack_frame_data){.dtype = entity->dtype});
+}
+
+void codegen_generate_entity_access_for_array_bracket(struct resolver_result* result,
+																											struct resolver_entity* entity) {
+	if(entity->flags & RESOLVER_ENTITY_FLAG_IS_POINTER_ARRAY_ENTITY) {
+		codegen_generate_entity_access_for_array_bracket_pointer(result, entity);
+		return;
+	}
+	asm_push_ins_pop("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+									 "result_value");
+	codegen_generate_expressionable(entity->array.array_index_node, history_begin(0));
+	asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+	if(entity->flags & RESOLVER_ENTITY_FLAG_JUST_USE_OFFSET) {
+		asm_push("add ebx, %i", entity->offset);
+	} else {
+		asm_push("imul eax, %i", entity->offset);
+		asm_push("add ebx, eax");
+	}
+	asm_push_ins_push_with_data(
+		"ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,
+		&(struct stack_frame_data){.dtype = entity->dtype});
+}
+
 void codegen_generate_entity_access_for_entity(struct resolver_result* result,
                                                struct resolver_entity* entity,
                                                struct history* history) {
   switch (entity->type) {
     case RESOLVER_ENTITY_TYPE_ARRAY_BRACKET:
+			codegen_generate_entity_access_for_array_bracket(result, entity);
       break;
 
     case RESOLVER_ENTITY_TYPE_VARIABLE:
@@ -1184,6 +1384,7 @@ void codegen_generate_entity_access_for_entity(struct resolver_result* result,
       break;
 
     case RESOLVER_ENTITY_TYPE_CAST:
+			codegen_generate_entity_access_for_cast(result, entity);
       break;
 
     default:
@@ -1238,8 +1439,11 @@ bool codegen_resolve_node_for_value(struct node* node,
 
   struct datatype dtype;
   assert(asm_datatype_back(&dtype));
+	if(result->flags & RESOLVER_RESULT_FLAG_DOES_GET_ADDRESS) {
 
-  if (datatype_is_struct_or_union_non_pointer(&dtype)) {
+	} else if(result->last_entity->type == RESOLVER_ENTITY_TYPE_FUNCTION_CALL && datatype_is_struct_or_union_non_pointer(&result->last_entity->dtype)) {
+
+	} else if (datatype_is_struct_or_union_non_pointer(&dtype)) {
     codegen_generate_structure_push(result->last_entity, history, 0);
   } else if (!(dtype.flags & DATATYPE_FLAG_IS_POINTER)) {
     asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
@@ -1391,7 +1595,11 @@ void codegen_gen_math_for_value(const char* reg, const char* value, int flags,
     asm_push("sal %s, %s", reg, value);
   } else if (flags & EXPRESSION_IS_BITSHIFT_RIGHT) {
     value = codegen_sub_register(value, DATA_SIZE_BYTE);
-    asm_push("sar %s, %s", reg, value);
+		if(is_signed) {
+			asm_push("sar %s, %s", reg, value);
+		} else {
+			asm_push("shr %s, %s", reg, value);
+		}
   } else if (flags & EXPRESSION_IS_BITWISE_AND) {
     asm_push("and %s, %s", reg, value);
   } else if (flags & EXPRESSION_IS_BITWISE_OR) {
@@ -1762,6 +1970,26 @@ void codegen_generate_switch_case_statement(struct node* node) {
 	codegen_end_case_statement();
 }
 
+void codegen_generate_goto_statement(struct node* node) {
+	asm_push("jmp label_%s", node->stmt._goto.label->sval);
+}
+
+void codegen_generate_label(struct node* node) {
+	asm_push("label_%s:", node->stmt._goto.label->sval);
+}
+
+void codegen_generate_scope_variable_for_list(struct node* var_list_node) {
+	assert(var_list_node->type == NODE_TYPE_VARIABLE_LIST);
+	vector_set_peek_pointer(var_list_node->var_list.list, 0);
+	struct node* var_node = vector_peek(var_list_node->var_list.list);
+	while (var_node) {
+		codegen_generate_scope_variable(var_node);
+		var_node = vector_peek(var_list_node->var_list.list);
+	}
+
+}
+
+
 void codegen_generate_statement(struct node* node, struct history* history) {
   switch (node->type) {
     case NODE_TYPE_VARIABLE:
@@ -1780,6 +2008,9 @@ void codegen_generate_statement(struct node* node, struct history* history) {
 			codegen_generate_statement_return(node);
 			break;
 
+		case NODE_TYPE_VARIABLE_LIST:
+			codegen_generate_scope_variable_for_list(node);
+			break;
 		case NODE_TYPE_STATEMENT_IF:
 			codegen_generate_if_statement(node);
 			break;
@@ -1812,8 +2043,16 @@ void codegen_generate_statement(struct node* node, struct history* history) {
 			codegen_generate_switch_case_statement(node);
 			break;
 
+		case NODE_TYPE_STATEMENT_GOTO:
+			codegen_generate_goto_statement(node);
+			break;
+
 		case NODE_TYPE_STATEMENT_DEFAULT:
 			codegen_generate_switch_default_statement(node);
+			break;
+		
+		case NODE_TYPE_LABEL:
+			codegen_generate_label(node);
 			break;
   }
   codegen_discard_unused_stack();

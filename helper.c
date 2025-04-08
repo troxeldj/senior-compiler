@@ -2,6 +2,15 @@
 #include <assert.h>
 #include <helpers/vector.h>
 
+bool file_exists(const char* file_name) {
+	FILE* f = fopen(file_name, "r");
+	if(!f) {
+		return false;
+	}
+	fclose(f);
+	return true;
+}
+
 size_t variable_size(struct node* var_node) {
 	assert(var_node->type == NODE_TYPE_VARIABLE);
 	return datatype_size(&var_node->var.type);
@@ -250,4 +259,55 @@ struct datatype datatype_for_numeric() {
 	dtype.type_str = "int";
 	dtype.size = DATA_SIZE_DWORD;
 	return dtype;
+}
+
+struct datatype datatype_for_string() {
+	struct datatype dtype = {};
+	dtype.type = DATA_TYPE_INTEGER;
+	dtype.type_str = "char";
+	dtype.flags |= DATATYPE_FLAG_IS_LITERAL | DATATYPE_FLAG_IS_POINTER;
+	dtype.size = DATA_SIZE_DWORD;
+	dtype.pointer_depth = 1;
+	return dtype;
+}
+
+bool unary_operand_compatible(struct token* token) {
+	is_access_operator(token->sval) || is_array_operator(token->sval) || is_parentheses_operator(token->sval);
+}
+
+long arithmetic(struct compile_process* compiler, long left_operand, long right_operand, const char* op, bool* success) {
+	*success = true;
+	int result = 0;
+	if(S_EQ(op, "*")) {
+		result = left_operand * right_operand;
+	} else if(S_EQ(op, "+")) {
+		result = left_operand + right_operand;
+	} else if(S_EQ(op, "/")) {
+		result = left_operand / right_operand;
+	} else if(S_EQ(op, "-")) {
+		result = left_operand - right_operand;
+	} else if(S_EQ(op, "==")) {
+		result = left_operand == right_operand;
+	} else if(S_EQ(op, "!=")) {
+		result = left_operand != right_operand;
+	} else if(S_EQ(op, ">")) {
+		result = left_operand > right_operand;
+	} else if(S_EQ(op, "<")) {
+		result = left_operand < right_operand;
+	} else if (S_EQ(op, ">=")) {
+		result = left_operand >= right_operand;
+	} else if (S_EQ(op, "<=")) {
+		result = left_operand <= right_operand;
+	} else if(S_EQ(op, "<<")) {
+		result = left_operand << right_operand;
+	} else if(S_EQ(op, ">>")) {
+		result = left_operand >> right_operand;
+	} else if(S_EQ(op, "&&")) {
+		result = left_operand && right_operand;
+	} else if(S_EQ(op, "||")) {
+		result = left_operand || right_operand;
+	} else {
+		success = false;
+	}
+	return result;
 }

@@ -18,6 +18,7 @@ bool lex_is_in_expression();
 static struct lex_process* lex_process;
 static struct token tmp_token;
 
+char lex_get_escaped_char(char c);
 static char peekc() { return lex_process->function->peek_char(lex_process); }
 
 static char nextc() {
@@ -106,14 +107,34 @@ struct token* token_make_number() {
   return token_make_number_for_value(read_number());
 }
 
+static void lex_handle_escape_number(struct buffer* buf) {
+	long long number = read_number();
+	if(number > 255) {
+		compiler_error(lex_process->compiler, "The escape number %lld is too big\n", number);
+	}
+	buffer_write(buf, number);
+}
+
+static void lex_handle_escape(struct buffer* buf) {
+	char c = peekc();
+	if(isdigit(c)) {
+		lex_handle_escape_number(buf);
+		return;
+	}
+
+	char co = lex_get_escaped_char(c);
+	buffer_write(buf,co);
+	nextc();
+}
+
 static struct token* token_make_string(char start_delim, char end_delim) {
   struct buffer* buf = buffer_create();
   assert(nextc() == start_delim);
   char c = nextc();
   for (; c != end_delim && c != EOF; c = nextc()) {
     if (c == '\\') {
-      // We need to handle an escape character.
-      continue;
+			lex_handle_escape(buf);
+			continue;
     }
 
     buffer_write(buf, c);
@@ -145,6 +166,7 @@ bool op_valid(const char* op) {
          S_EQ(op, "++") || S_EQ(op, "--") || S_EQ(op, "=") || S_EQ(op, "!=") ||
          S_EQ(op, "==") || S_EQ(op, "->") || S_EQ(op, "(") || S_EQ(op, "[") ||
          S_EQ(op, ",") || S_EQ(op, ".") || S_EQ(op, "...") || S_EQ(op, "~") ||
+				 S_EQ(op, "<<=") || S_EQ(op, ">>=") ||
          S_EQ(op, "?") || S_EQ(op, "%");
 }
 void read_op_flush_back_keep_first(struct buffer* buffer) {
@@ -163,14 +185,18 @@ const char* read_op() {
   char op = nextc();
   struct buffer* buffer = buffer_create();
   buffer_write(buffer, op);
-
-  if (!op_treated_as_one(op)) {
+	if(op == '*' && peekc() == '=') {
+		buffer_write(buffer, peekc());
+		nextc();
+	} else if (!op_treated_as_one(op)) {
     op = peekc();
-    if (is_single_operator(op)) {
-      buffer_write(buffer, op);
-      nextc();
-      single_operator = false;
-    }
+		for(int i = 0; i < 2; i++) {
+			if (is_single_operator(op)) {
+				buffer_write(buffer, op);
+				nextc();
+				single_operator = false;
+			}
+		}
   }
 
   // NULL TERMINATOR

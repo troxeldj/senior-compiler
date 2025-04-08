@@ -1,4 +1,6 @@
-#define ABC 1
-#ifdef ABC
-#error "testing"
-#endif
+int printf(const char* s); 
+
+
+int main() {
+	printf("Hello, World\n");
+}

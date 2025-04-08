@@ -334,7 +334,6 @@ int expressionable_parse_token(struct expressionable* expressionable, struct tok
 			break;
 		case TOKEN_TYPE_OPERATOR:
 			expressionable_parse_expression(expressionable, token);
-			
 			break;
 	}
 	return res;

@@ -270,6 +270,8 @@ struct preprocessor_included_file {
 	char filename[PATH_MAX];
 };
 
+typedef void (*PREPROCESSOR_STATIC_INCLUDE_HANDLER_POST_CREATION)(struct preprocessor* preprocessor, struct preprocessor_included_file* incl_file);
+
 struct preprocessor {
 	// vector of struct preprocessor_definition*
 	struct vector* definitions;
@@ -1016,6 +1018,10 @@ struct compile_process* compile_process_create(const char* filename, const char*
 char compile_process_next_char(struct lex_process* lex_process);
 char compile_process_peek_char(struct lex_process* lex_process);
 void compile_process_push_char(struct lex_process* lex_process, char c);
+const char* compiler_include_dir_begin(struct compile_process* process);
+struct compile_process* compile_include(const char* file_name, struct compile_process* parent_process);
+const char* compiler_include_dir_next(struct compile_process* process);
+void compiler_setup_default_include_dirs(struct vector* include_vec);
 
 void compiler_error(struct compile_process* compiler, const char* msg, ...);
 void compiler_warning(struct compile_process* compiler, const char* msg, ...);
@@ -1045,6 +1051,9 @@ bool datatype_is_struct_or_union_for_name(const char* name);
 bool datatype_is_struct_or_union(struct datatype* dtype);
 bool datatype_is_struct_or_union_non_pointer(struct datatype* dtype);
 struct datatype datatype_for_numeric();
+struct datatype datatype_for_string();
+bool unary_operand_compatible(struct token* token);
+long arithmetic(struct compile_process* compiler, long left_operand, long right_operand, const char* op, bool* success);
 struct datatype* datatype_thats_a_pointer(struct datatype* d1, struct datatype* d2);
 struct datatype* datatype_pointer_reduce(struct datatype* dtype, int by);
 bool is_logical_operator(const char* op);
@@ -1419,6 +1428,7 @@ struct token* expressionable_token_next(struct expressionable* expressionable);
 int expressionable_parse_single_with_flags(struct expressionable* expressionable, int flags);
 int expressionable_parse_single(struct expressionable* expressionable);
 void expressionable_parse(struct expressionable* expressionable);
+bool file_exists(const char* file_name);
 
 
 #endif

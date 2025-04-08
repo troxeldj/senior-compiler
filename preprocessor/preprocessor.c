@@ -1,6 +1,7 @@
 #include "compiler.h"
 #include "helpers/vector.h"
 #include "helpers/buffer.h"
+#include <assert.h>
 
 enum {
 	TYPEDEF_TYPE_STANDARD,
@@ -18,7 +19,7 @@ struct typedef_type {
 };
 
 enum {
-	PREPROCESSOR_FLAG_EVALUATE = 0b00000001
+	PREPROCESSOR_FLAG_EVALUATE_NODE = 0b00000001
 };
 
 enum {
@@ -77,7 +78,13 @@ struct preprocessor_node {
 		};
 		const char* sval;
 };
+
+int preprocessor_evaluate(struct compile_process* compiler, struct preprocessor_node* root_node);
+int preprocessor_parse_evaluate(struct compile_process* compiler, struct vector* token_vector);
 void preprocessor_handle_token(struct compile_process* compiler, struct token* token);
+int preprocessor_handle_identifier_for_tok_vec(struct compile_process* compiler, struct vector* src, struct vector* dst, struct token* tok);
+void preprocessor_token_vec_push_src_resolve_def(struct compile_process* compiler, struct vector* src, struct vector* dst, struct token* tok);
+struct vector* preprocessor_definition_value(struct preprocessor_definition* definition);
 
 void preprocessor_execute_warning(struct compile_process* compiler, const char* msg) {
 	compiler_warning(compiler, "#warning: %s", msg);
@@ -196,8 +203,6 @@ void preprocessor_initialize(struct preprocessor* preprocessor) {
 	memset(preprocessor, 0, sizeof(struct preprocessor));
 	preprocessor->definitions = vector_create(sizeof(struct preprocessor_definition*));
 	preprocessor->includes = vector_create(sizeof(struct preprocessor_included_file*));
-	#warning "create preprocessor default definitions"
-
 }
 
 struct preprocessor* preprocessor_create(struct compile_process* compiler) {
@@ -226,6 +231,22 @@ struct token* preprocessor_peek_next_token_skip_nl(struct compile_process* compi
 	}
 	token = preprocessor_next_token_no_increment(compiler);
 	return token;
+}
+
+struct token* preprocessor_next_token_w_vec_no_inc(struct compile_process* compiler, struct vector* prior_tok_vec, bool overflow_use_comp_toks) {
+	struct token* tok = vector_peek_no_increment(prior_tok_vec);
+	if(tok == NULL && overflow_use_comp_toks)	{
+		tok = preprocessor_peek_next_token_skip_nl(compiler);
+	}
+	return tok;
+}
+
+struct token* preprocessor_next_token_w_vec(struct compile_process* compiler, struct vector* prior_tok_vec, bool overflow_use_comp_toks) {
+	struct token* tok = vector_peek(prior_tok_vec);
+	if(tok == NULL && overflow_use_comp_toks)	{
+		tok = preprocessor_peek_next_token_skip_nl(compiler);
+	}
+	return tok;
 }
 
 void* preprocessor_handle_number_token(struct expressionable* expressionable) {
@@ -423,6 +444,29 @@ bool preprocessor_token_is_ifdef(struct token* token) {
 	return (S_EQ(token->sval, "ifdef"));
 }
 
+bool preprocessor_token_is_if(struct token* token) {
+	if(!preprocessor_token_is_preprocessor_keyword(token)) {
+		return false;
+	}
+	return (S_EQ(token->sval, "if"));
+
+}
+
+bool preprocessor_token_is_ifndef(struct token* token) {
+	if(!preprocessor_token_is_preprocessor_keyword(token)) {
+		return false;
+	}
+	return (S_EQ(token->sval, "ifndef"));
+}
+
+
+bool preprocessor_token_is_include(struct token* token) {
+	if(!preprocessor_token_is_preprocessor_keyword(token)) {
+		return false;
+	}
+	return (S_EQ(token->sval, "include"));
+}
+
 struct buffer* preprocessor_multi_value_string(struct compile_process* compiler) {
 	struct buffer* buffer = buffer_create();
 	struct token* value_token = preprocessor_next_token(compiler);
@@ -493,6 +537,16 @@ struct preprocessor_definition* preprocessor_definition_create(const char* name,
 	return definition;
 }
 
+struct preprocessor_definition* preprocessor_definition_create_typedef(const char* name, struct vector* value_vec, struct preprocessor* preprocessor) {
+	struct preprocessor_definition* definition = calloc(1, sizeof(struct preprocessor_definition));
+	definition->type = PREPROCESSOR_DEFINITITION_TYPEDEF;
+	definition->name = name;
+	definition->_typedef.value = value_vec;
+	definition->preprocessor = preprocessor;
+	vector_push(preprocessor->definitions, &definition);
+	return definition;
+}
+
 struct preprocessor_definition* preprocessor_get_definition(struct preprocessor* preprocessor, const char* name) {
 	vector_set_peek_pointer(preprocessor->definitions, 0);
 	struct preprocessor_definition* current_def = vector_peek_ptr(preprocessor->definitions);
@@ -503,6 +557,61 @@ struct preprocessor_definition* preprocessor_get_definition(struct preprocessor*
 		current_def = vector_peek_ptr(preprocessor->definitions);
 	}
 	return current_def;
+}
+
+struct vector* preprocessor_definition_value_for_standard(struct preprocessor_definition* definition) {
+	return definition->standard.value;
+}
+
+struct vector* preprocessor_definition_value_for_typedef_or_other(struct preprocessor_definition* definition) {
+	if(definition->type != PREPROCESSOR_DEFINITITION_TYPEDEF) {
+		return preprocessor_definition_value(definition);
+	}
+	return definition->_typedef.value;
+}
+
+struct vector* preprocessor_definition_value_for_typedef(struct preprocessor_definition* definition) {
+	return preprocessor_definition_value_for_typedef_or_other(definition);
+}
+
+struct vector* preprocessor_definition_value_with_arguments(struct preprocessor_definition* definition, struct preprocessor_function_arguments* arguments) {
+	if(definition->type == PREPROCESSOR_DEFINITITION_NATIVE_CALLBACK) {
+		return NULL;
+	} else if(definition->type == PREPROCESSOR_DEFINITITION_TYPEDEF) {
+		return preprocessor_definition_value_for_typedef(definition);
+	}
+
+	return preprocessor_definition_value_for_standard(definition);
+}
+
+int preprocessor_parse_evaluate_token(struct compile_process* compiler, struct token* token) {
+	struct vector* token_vec = vector_create(sizeof(struct token));
+	vector_push(token_vec, token);
+	return preprocessor_parse_evaluate(compiler, token_vec);
+}
+
+int preprocessor_definition_evaluated_value_for_standard(struct preprocessor_definition* definition) {
+	struct token* token = vector_back(definition->standard.value);
+	if(token->type == TOKEN_TYPE_IDENTIFIER) {
+		return preprocessor_parse_evaluate_token(definition->preprocessor->compiler, token);
+	}
+	if(token->type != TOKEN_TYPE_NUMBER) {
+		compiler_error(definition->preprocessor->compiler, "The definition must hold a number value.");
+	}
+	return token->llnum;
+}
+
+int preprocessor_definition_evaluated_value(struct preprocessor_definition* definition, struct preprocessor_function_arguments* args) {
+	if(definition->type == PREPROCESSOR_DEFINITITION_STANDARD) {
+		return preprocessor_definition_evaluated_value_for_standard(definition);
+	} else if (definition->type == PREPROCESSOR_DEFINITITION_NATIVE_CALLBACK) {
+		return -1;
+	}
+	compiler_error(definition->preprocessor->compiler, "The definition can not be evaluated to a number");
+}
+
+struct vector* preprocessor_definition_value(struct preprocessor_definition* definition) {
+	return preprocessor_definition_value_with_arguments(definition, NULL);
 }
 
 
@@ -629,7 +738,389 @@ void preprocessor_read_to_endif(struct compile_process* compiler, bool true_clau
 			preprocessor_skip_to_endif(compiler);
 		}
 	}
+}
 
+int preprocessor_evaluate_number(struct preprocessor_node* node) {
+	return node->const_val.llnum;
+}
+
+int preprocessor_evaluate_identifier(struct compile_process* compiler, struct preprocessor_node* node) {
+	struct preprocessor* preprocess = compiler->preprocessor;
+	struct preprocessor_definition* definition = preprocessor_get_definition(preprocess, node->sval);
+	if(!definition) {
+		return true;
+	}
+
+	if(vector_count(preprocessor_definition_value(definition)) > 1) {
+		struct vector* node_vector = vector_create(sizeof(struct preprocessor_node*));
+		struct expressionable* expressionable = expressionable_create(&preprocessor_expressionable_config, preprocessor_definition_value(definition), node_vector, EXPRESSIONABLE_FLAG_IS_PREPROCESSOR_EXPRESSION);
+		expressionable_parse(expressionable);
+		struct preprocessor_node* node = expressionable_node_pop(expressionable);
+		int result = preprocessor_evaluate(compiler, node);
+		return result;
+	}
+
+	if(vector_count(preprocessor_definition_value(definition)) == 0) {
+		return false;
+	}
+
+	return preprocessor_definition_evaluated_value(definition, NULL);
+}
+
+int preprocessor_arithmetic(struct compile_process* compiler, long left_operand, long right_operand, const char* op) {
+	bool success = false;
+	long result = arithmetic(compiler, left_operand, right_operand, op, &success);
+	if(!success) {
+		compiler_error(compiler, "Arithmetic in preprocessor expression failed. Operator %s not supported", op);
+	}
+	return result;
+}
+
+struct preprocessor_function_arguments* preprocessor_function_arguments_create() {
+	struct preprocessor_function_arguments* args = calloc(1, sizeof(struct preprocessor_function_arguments));
+	args->arguments = vector_create(sizeof(struct preprocessor_function_argument));
+	return args;
+}
+
+bool preprocessor_expression_is_macro_func_call(struct preprocessor_node* node) {
+	return node->type == PREPROCESSOR_EXPRESSION_NODE && S_EQ(node->exp.op, "()") && node->exp.left->type == PREPROCESSOR_IDENTIFIER_NODE;
+}
+
+void preprocessor_number_push_to_function_args(struct preprocessor_function_arguments* args, int64_t number) {
+	struct token tok;
+	tok.type == TOKEN_TYPE_NUMBER;
+	tok.llnum = number;
+	preprocessor_token_push_to_function_arguments(args, &tok);
+}
+
+void preprocessor_evaluate_func_call_arg(struct compile_process* compiler, struct preprocessor_node* node, struct preprocessor_function_arguments* args) {
+	if(node->type == PREPROCESSOR_EXPRESSION_NODE && S_EQ(node->exp.op, ","))	{
+		//evaluate left then right argument
+		preprocessor_evaluate_func_call_arg(compiler, node->exp.left, args);
+		preprocessor_evaluate_func_call_arg(compiler, node->exp.right, args);
+		return;
+	} else if(node->type == PREPROCESSOR_PARENTHESES_NODE) {
+		preprocessor_evaluate_func_call_arg(compiler, node->parentheses.exp, args);
+		return;
+	}
+	// Push evaluated number (after evaluated nested macros) to args
+	preprocessor_number_push_to_function_args(args, preprocessor_evaluate(compiler, node));
+}
+
+void preprocessor_evaluate_func_call_args(struct compile_process* compiler, struct preprocessor_node* node, struct preprocessor_function_arguments* args) {
+	preprocessor_evaluate_func_call_arg(compiler, node, args);
+}
+
+bool preprocessor_is_macro_func(struct preprocessor_definition* definition) {
+	return definition->type == PREPROCESSOR_DEFINITITION_MACRO_FUNCTION || definition->type == PREPROCESSOR_DEFINITITION_NATIVE_CALLBACK;
+}
+
+int preprocessor_func_args_count(struct preprocessor_function_arguments* args) {
+	if(!args)
+		return 0;
+	return vector_count(args->arguments);
+}
+
+int preprocessor_macro_function_push_arg(struct compile_process* process, struct preprocessor_definition* definition, struct preprocessor_function_arguments* args, const char* arg_name, struct vector* definition_token_vec, struct vector* val_vec_targ) {
+	// returns arg index
+	int arg_index = preprocessor_definition_argument_exists(definition, arg_name);
+	if(arg_index != -1) {
+		// push the value of the arg to the value vector
+		// example:
+		// define x 10
+		// define y 20
+		// #define SUMVAL x + y
+		// we get the actual value for x (10) and push val to value_vec
+		preprocessor_function_argument_push_to_vector(preprocessor_function_argument_at(args, arg_index), val_vec_targ);
+	}
+	return arg_index;
+}
+
+void preprocessor_token_vec_push_src_tok_to_dst(struct compile_process* compiler, struct token* tok, struct vector* dst) {
+	vector_push(dst, tok);
+}
+
+bool preprocessor_token_is_typedef(struct token* tok) {
+	if(!preprocessor_token_is_preprocessor_keyword(tok)) {
+		return false;
+	}
+	return (S_EQ(tok->sval, "typedef"));
+}
+
+void preprocessor_handle_typedef_body_for_non_struct_or_union(struct compile_process* compiler, struct vector* tok_vec, struct typedef_type* td, struct vector* src, bool overflow_use_tok_vec) {
+	td->type = TYPEDEF_TYPE_STANDARD;
+	struct token* tok = preprocessor_next_token_w_vec(compiler, src, overflow_use_tok_vec);
+	while(tok) {
+		if(token_is_symbol(tok, ';')) {
+			break;
+		}
+		preprocessor_token_vec_push_src_resolve_def(compiler, src, tok_vec, tok);
+		tok = preprocessor_next_token_w_vec(compiler, src, overflow_use_tok_vec);
+	}
+}
+
+void preprocessor_handle_typedef_body_brackets(struct compile_process* compiler, struct vector* tok_vec, struct vector* src, bool overflow_use_tok_vec) {
+	struct token* tok = preprocessor_next_token_w_vec(compiler, src, overflow_use_tok_vec);
+	while(tok) {
+		if(token_is_symbol(tok, '{')) {
+			vector_push(tok_vec, tok);
+			preprocessor_handle_typedef_body_brackets(compiler, tok_vec, src, overflow_use_tok_vec);
+			tok = preprocessor_next_token_w_vec(compiler, src, overflow_use_tok_vec);
+			continue;
+		}
+		vector_push(tok_vec, tok);
+		if(token_is_symbol(tok, '}')) {
+			break;
+		}
+		tok = preprocessor_next_token_w_vec(compiler, src, overflow_use_tok_vec);
+	}
+}
+
+void preprocessor_handle_typedef_body_for_struct_or_union(struct compile_process* compiler, struct vector* tok_vec, struct typedef_type* td, struct vector* src, bool overflow_use_tok_vec) {
+	struct token* tok = preprocessor_next_token_w_vec(compiler, src, overflow_use_tok_vec);
+	assert(token_is_keyword(tok, "struct"));
+	td->type = TYPEDEF_TYPE_STRUCTURE_TYPEDEF;
+	
+	// struct keyword
+	vector_push(tok_vec, tok);
+
+	tok = preprocessor_next_token_w_vec(compiler, src, overflow_use_tok_vec);
+
+	if(tok->type == TOKEN_TYPE_IDENTIFIER) {
+		td->structure.sname = tok->sval;		
+		vector_push(tok_vec, tok);
+		tok = preprocessor_next_token_w_vec_no_inc(compiler, src, overflow_use_tok_vec);
+		if(tok->type == TOKEN_TYPE_IDENTIFIER) {
+			// has no body
+			vector_push(tok_vec, tok);
+			return;
+		}
+	}
+	// has a body
+	while(tok) {
+		if(token_is_symbol(tok, '{')) {
+			// body
+			td->type = TYPEDEF_TYPE_STRUCTURE_TYPEDEF;
+			vector_push(tok_vec, tok);
+			preprocessor_handle_typedef_body_brackets(compiler, tok_vec, src, overflow_use_tok_vec);
+			tok = preprocessor_next_token_w_vec(compiler, src, overflow_use_tok_vec);
+			continue;
+		}
+		if(token_is_symbol(tok, ';')) {
+			break;
+		}
+		preprocessor_token_vec_push_src_resolve_def(compiler, src, tok_vec, tok);
+		tok = preprocessor_next_token_w_vec(compiler, src, overflow_use_tok_vec);
+	}
+
+}
+
+void preprocessor_handle_typedef_body(struct compile_process* compiler, struct vector* tok_vec, struct typedef_type* td, struct vector* src, bool overflow_use_tok_vec) {
+    memset(td, 0, sizeof(struct typedef_type));
+    struct token* token = preprocessor_next_token_w_vec_no_inc(compiler, src, overflow_use_tok_vec);
+    if (token_is_keyword(token, "struct") || token_is_keyword(token, "union")) {
+        preprocessor_handle_typedef_body_for_struct_or_union(compiler, tok_vec, td, src, overflow_use_tok_vec);
+    } else {
+        preprocessor_handle_typedef_body_for_non_struct_or_union(compiler, tok_vec, td, src, overflow_use_tok_vec);
+    }
+}
+
+void preprocessor_token_push_semi(struct compile_process* compiler) {
+	struct token tok;
+	tok.type = TOKEN_TYPE_SYMBOL;
+	tok.cval = ';';
+	vector_push(compiler->token_vec, &tok);
+}
+
+void preprocessor_handle_typedef(struct compile_process* compiler, struct vector* src, bool overflow_use_tok_vec) {
+	struct vector* tok_vec = vector_create(sizeof(struct token));
+	struct typedef_type td;
+	preprocessor_handle_typedef_body(compiler, tok_vec, &td, src, overflow_use_tok_vec);
+
+	struct token* name_tok = vector_back_or_null(tok_vec);
+	if(!name_tok) {
+		compiler_error(compiler, "No name token provided for typedef");
+	}
+	
+	if(name_tok->type != TOKEN_TYPE_IDENTIFIER) {
+		compiler_error(compiler, "Typedef definition name is not a valid identifier");
+	}
+
+	td.defintion_name = name_tok->sval;
+
+	vector_pop(tok_vec);
+
+	if(td.type == TYPEDEF_TYPE_STRUCTURE_TYPEDEF) {
+		preprocessor_token_vec_push_src(compiler, tok_vec);
+		preprocessor_token_push_semi(compiler);
+
+		tok_vec = vector_create(sizeof(struct token));
+		preprocessor_token_vec_push_keyword_and_identifier(tok_vec, "struct", td.structure.sname);
+	}
+
+	struct preprocessor* preprocessor = compiler->preprocessor;
+	preprocessor_definition_create_typedef(td.defintion_name, tok_vec, preprocessor);
+}
+
+void preprocessor_token_vec_push_src_resolve_def(struct compile_process* compiler, struct vector* src, struct vector* dst, struct token* tok) {
+	// resolve def
+
+	if(preprocessor_token_is_typedef(tok)) {
+		preprocessor_handle_typedef(compiler, src, true);
+		return;
+	}
+
+	if(tok->type == TOKEN_TYPE_IDENTIFIER) {
+		preprocessor_handle_identifier_for_tok_vec(compiler, src, dst, tok);
+		return;
+	}
+
+	// push to dest vec
+	preprocessor_token_vec_push_src_tok_to_dst(compiler, tok, dst);
+}
+
+void preprocessor_token_vec_push_src_resolve_defs(struct compile_process* compiler, struct vector* src, struct vector* dst) {
+	// prevents inf loop
+	assert(src != compiler->token_vec);
+	vector_set_peek_pointer(src, 0);
+	struct token* tok = vector_peek(src);
+	while(tok) {
+		preprocessor_token_vec_push_src_resolve_def(compiler, src, dst, tok);
+		tok = vector_peek(src);
+	}
+}
+
+int preprocessor_macro_function_push_general_definition(struct compile_process* compiler, struct preprocessor_definition* definition, struct preprocessor_function_arguments* args, struct token* arg_token, struct vector* def_token_vec, struct vector* value_vec_target) {
+	if(arg_token->type != TOKEN_TYPE_IDENTIFIER) {
+		return -1;
+	}
+	const char* arg_name = arg_token->sval;
+	int result = preprocessor_macro_function_push_arg(compiler, definition, args, arg_name, def_token_vec, value_vec_target);
+	if(result != -1) {
+		return 0;
+	}
+	struct preprocessor_definition* arg_def = preprocessor_get_definition(compiler->preprocessor, arg_name);
+	if(arg_def) {
+		preprocessor_token_vec_push_src_resolve_defs(compiler, preprocessor_definition_value(arg_def), compiler->token_vec);
+		return 0;
+	}
+
+	return -1;
+}
+
+void preprocessor_macro_func_push_general(struct compile_process* compiler, struct preprocessor_definition* definition, struct preprocessor_function_arguments* args, struct token* arg_token, struct vector* def_token_vec, struct vector* value_vec_target) {
+	int result = preprocessor_macro_function_push_general_definition(compiler, definition, args, arg_token, def_token_vec, value_vec_target);
+	if(result == -1) {
+		vector_push(value_vec_target, arg_token);
+	}
+}
+
+void preprocessor_handle_func_arg_to_str(struct compile_process* compiler, struct vector* src, struct vector* value_vec, struct preprocessor_definition* definition, struct preprocessor_function_arguments* args) {
+	struct token* next_token = vector_peek(src);
+	if(!next_token || next_token->type != TOKEN_TYPE_IDENTIFIER) {
+		compiler_error(compiler, "No macro function argument provided to convert to string");
+	}
+	int arg_index = preprocessor_definition_argument_exists(definition, next_token->sval);
+	if(arg_index < 0) {
+		compiler_error(compiler, "Unexpected macro function arg with name %s", next_token->sval);
+	}
+	struct preprocessor_function_argument* arg = preprocessor_function_argument_at(args, arg_index);
+	if(!arg) {
+		compiler_error(compiler, "Argument exists but failed to retrieve from vector");
+	}
+}
+
+int preprocessor_macro_func_exec(struct compile_process* compiler, const char* macro_func_name, struct preprocessor_function_arguments* arguments, int flags) {
+	struct preprocessor* preprocessor = compiler->preprocessor;
+	struct preprocessor_definition* definition = preprocessor_get_definition(preprocessor, macro_func_name);
+
+	// definition doesn't exist
+	if(!macro_func_name) {
+		compiler_error(compiler, "Macro function with name %s was not found. Unable to call nonexistant macro function.", macro_func_name);
+	}
+
+	// definition found but not a macro function
+	if(!preprocessor_is_macro_func(definition)) {
+		compiler_error(compiler, "Preprocessor definition with name %s is not a macro function. Unable to call definitions of other types.", macro_func_name);
+	}
+
+	// function arguments passed not equal to the definition arguments vector count
+	if(vector_count(definition->standard.arguments) != preprocessor_func_args_count(arguments) && definition->type != PREPROCESSOR_DEFINITITION_NATIVE_CALLBACK) {
+		compiler_error(compiler, "Too many arguments passed to macro function with name %s", macro_func_name);
+	}
+
+	struct vector* value_vector_target = vector_create(sizeof(struct token));
+	struct vector* definition_token_vec = preprocessor_definition_value_with_arguments(definition, arguments);
+	vector_set_peek_pointer(definition_token_vec, 0);
+	struct token* tok = vector_peek(definition_token_vec);
+	while(tok) {
+		if(token_is_symbol(tok, '#')) {
+			//preprocessor_handle_func_arg_to_str(compiler );
+		}
+		preprocessor_macro_func_push_general(compiler, definition, arguments, tok, definition_token_vec, value_vector_target);
+		tok = vector_peek(definition_token_vec);
+	}
+	
+	// evaluate
+	if(flags & PREPROCESSOR_FLAG_EVALUATE_NODE) {
+		return preprocessor_parse_evaluate(compiler, value_vector_target);
+	}
+
+	// push straight to compiler token vector
+	preprocessor_token_vec_push_src(compiler, value_vector_target);
+}
+
+int preprocessor_evaluate_func_call(struct compile_process* compiler, struct preprocessor_node* node) {
+	const char* macro_func_name = node->exp.left->sval;	
+	struct preprocessor_node* func_call_arguments = node->exp.right->parentheses.exp;
+	struct preprocessor_function_arguments* arguments = preprocessor_function_arguments_create();
+
+	preprocessor_evaluate_func_call_args(compiler, func_call_arguments, arguments);
+	return preprocessor_macro_func_exec(compiler, macro_func_name, arguments, PREPROCESSOR_FLAG_EVALUATE_NODE);
+}
+
+
+int preprocessor_evaluate_expression(struct compile_process* compiler, struct preprocessor_node* node) {
+	if(preprocessor_expression_is_macro_func_call(node)) {
+		return preprocessor_evaluate_func_call(compiler, node);
+	}
+
+	long left_operand = preprocessor_evaluate(compiler, node->exp.left);
+	if(node->exp.right->type == PREPROCESSOR_TERNARY_NODE) {
+	}
+	long right_operand = preprocessor_evaluate(compiler, node->exp.right);
+
+	return preprocessor_arithmetic(compiler, left_operand, right_operand, node->exp.op);
+}
+
+int preprocessor_evaluate(struct compile_process* compiler, struct preprocessor_node* root_node) {
+	struct preprocessor_node* current = root_node;
+	int result = 0;
+	switch(current->type) {
+		case PREPROCESSOR_NUMBER_NODE:
+			result = preprocessor_evaluate_number(current);
+			break;
+		case PREPROCESSOR_IDENTIFIER_NODE:
+			result = preprocessor_evaluate_identifier(compiler, current);
+			break;
+		case PREPROCESSOR_EXPRESSION_NODE:
+			result = preprocessor_evaluate_expression(compiler, current);
+			break; 
+	}
+	return result;
+}
+
+int preprocessor_parse_evaluate(struct compile_process* compiler, struct vector* token_vector) {
+	struct vector* node_vector = vector_create(sizeof(struct preprocessor_node*));
+	struct expressionable* expressionable = expressionable_create(&preprocessor_expressionable_config, token_vector, node_vector, 0);
+	expressionable_parse(expressionable);
+	struct preprocessor_node* root_node = expressionable_node_pop(expressionable);
+	return preprocessor_evaluate(compiler, root_node);
+}
+
+void preprocessor_handle_if_token(struct compile_process* compiler) {
+	int result = preprocessor_parse_evaluate(compiler, compiler->token_vec_original);
+	preprocessor_read_to_endif(compiler, result > 0);
 }
 
 void preprocessor_handle_ifdef_token(struct compile_process* compiler) {
@@ -639,6 +1130,37 @@ void preprocessor_handle_ifdef_token(struct compile_process* compiler) {
 	}
 	struct preprocessor_definition* definition = preprocessor_get_definition(compiler->preprocessor, condition_token->sval);
 	preprocessor_read_to_endif(compiler, definition != NULL);
+}
+
+void preprocessor_handle_ifndef_token(struct compile_process* compiler) {
+	struct token* condition_token = preprocessor_next_token(compiler);
+	if(!condition_token) {
+		compiler_error(compiler, "Need a condition token for ifndef statements\n");
+	}
+	struct preprocessor_definition* definition = preprocessor_get_definition(compiler->preprocessor, condition_token->sval);
+	preprocessor_read_to_endif(compiler, definition == NULL);
+}
+
+struct token* preprocessor_next_token_skip_nl(struct compile_process* compiler) {
+	struct token* token = preprocessor_next_token(compiler);
+	while(token && token->type == TOKEN_TYPE_NEWLINE) {
+		token = preprocessor_next_token(compiler);
+	}
+	return token;
+}
+
+void preprocessor_handle_include_token(struct compile_process* compiler) {
+	struct token* file_path_token = preprocessor_next_token_skip_nl(compiler);
+	if(!file_path_token) {
+		compiler_error(compiler, "No file path was provided for the include");
+	}
+
+	struct compile_process* new_proc = compile_include(file_path_token->sval, compiler);
+	if(!new_proc) {
+		compiler_error(compiler, "The file to include %s doesn't exist. Include failed.", file_path_token->sval);
+	}
+
+	preprocessor_token_vec_push_src(compiler, new_proc->token_vec);
 }
 
 
@@ -658,9 +1180,18 @@ int preprocessor_handle_hashtag_token(struct compile_process* compiler, struct t
 	} else if (preprocessor_token_is_error(next_token)) {
 		preprocessor_handle_error_token(compiler);
 		is_preprocessed = true;
+	} else if (preprocessor_token_is_if(next_token)) {
+		preprocessor_handle_if_token(compiler);
+		is_preprocessed = true;
 	} else if (preprocessor_token_is_ifdef(next_token)) {
 		// handle ifdef token
 		preprocessor_handle_ifdef_token(compiler);
+		is_preprocessed = true;
+	} else if(preprocessor_token_is_ifndef(next_token)) {
+		preprocessor_handle_ifndef_token(compiler);
+		is_preprocessed = true;
+	} else if(preprocessor_token_is_include(next_token)) {
+		preprocessor_handle_include_token(compiler);
 		is_preprocessed = true;
 	}
 	return is_preprocessed;
@@ -677,6 +1208,108 @@ void preprocessor_handle_symbol(struct compile_process* compiler, struct token* 
 	}
 }
 
+struct token* preprocessor_handle_ident_macro_call_arg_parse_parens(struct compile_process* compiler, struct vector* src, struct vector* value_vec, struct preprocessor_function_arguments* args, struct token* left_bracket_tok) {
+	vector_push(value_vec, left_bracket_tok);
+
+	struct token* next_token = vector_peek(src);
+	while(next_token && !token_is_symbol(next_token, ')')) {
+		if(token_is_operator(next_token, "(")) {
+			next_token = preprocessor_handle_ident_macro_call_arg_parse_parens(compiler, src, value_vec, args, next_token);
+		}
+		vector_push(value_vec, next_token);
+		next_token = vector_peek(src);
+	}
+
+	if(!next_token) {
+		compiler_error(compiler, "Did not receive closing parenthesis token in preprocessor macro func call");
+	}
+
+	vector_push(value_vec, next_token);
+	return vector_peek(src);
+}
+
+void preprocessor_function_arg_push(struct preprocessor_function_arguments* args, struct vector* value_vec) {
+	struct preprocessor_function_argument arg;
+	arg.tokens = vector_clone(value_vec);
+	vector_push(args->arguments, &arg);
+}
+
+void preprocessor_handle_ident_macro_call_arg(struct preprocessor_function_arguments* args, struct vector* token_vec) {
+	preprocessor_function_arg_push(args, token_vec);
+}
+
+struct token* preprocessor_handle_ident_macro_call_arg_parse(struct compile_process* compiler, struct vector* src, struct vector* value_vec, struct preprocessor_function_arguments* args, struct token* tok) {
+	if(token_is_operator(tok, "(")) {
+		return preprocessor_handle_ident_macro_call_arg_parse_parens(compiler, src, value_vec, args, tok);
+	}
+	if(token_is_symbol(tok, ')')) {
+		preprocessor_handle_ident_macro_call_arg(args, value_vec);
+		return NULL;
+	}
+
+	if(token_is_operator(tok, ",")) {
+		preprocessor_handle_ident_macro_call_arg(args, value_vec);
+		// clear value vector to handle next arg
+		vector_clear(value_vec);
+		tok = vector_peek(src);
+		return tok;
+	}
+
+	vector_push(value_vec, tok);
+	tok = vector_peek(src);
+	return tok;
+}
+
+struct preprocessor_function_arguments* preprocessor_handle_ident_macro_call_args(struct compile_process* compiler, struct vector* src) {
+	// skip (
+	vector_peek(src);
+
+	struct preprocessor_function_arguments* args = preprocessor_function_arguments_create();
+	struct token* tok = vector_peek(src);
+	struct vector* val_vec = vector_create(sizeof(struct token));
+	while(tok) {
+		tok = preprocessor_handle_ident_macro_call_arg_parse(compiler, src, val_vec, args, tok);
+	}
+	vector_free(val_vec);
+	return args;
+}
+
+int preprocessor_handle_identifier_for_tok_vec(struct compile_process* compiler, struct vector* src, struct vector* dst, struct token* tok) {
+	struct preprocessor_definition* definition = preprocessor_get_definition(compiler->preprocessor, tok->sval);
+	// just push for code gen to handle later
+	if(!definition) {
+		preprocessor_token_push_to_dst(dst, tok);
+		return -1;
+	}
+
+	if(definition->type == PREPROCESSOR_DEFINITITION_TYPEDEF) {
+		preprocessor_token_vec_push_src_to_dst(compiler, preprocessor_definition_value(definition), dst);
+		return 0;
+	}
+
+	if(token_is_operator(vector_peek_no_increment(src), "(")) {
+		struct preprocessor_function_arguments* args = preprocessor_handle_ident_macro_call_args(compiler, src);
+		const char* func_name = tok->sval;
+		preprocessor_macro_func_exec(compiler, func_name, args, 0);
+		return 0;
+	}
+
+	struct vector* def_val = preprocessor_definition_value(definition);
+	preprocessor_token_vec_push_src_resolve_defs(compiler, preprocessor_definition_value(definition), dst);
+}
+
+int preprocessor_handle_identifier(struct compile_process* compiler, struct token* tok) {
+	return preprocessor_handle_identifier_for_tok_vec(compiler, compiler->token_vec_original, compiler->token_vec, tok);
+}
+
+void preprocessor_handle_keyword(struct compile_process* compiler, struct token* tok) {
+	if(preprocessor_token_is_typedef(tok)) {
+		preprocessor_handle_typedef(compiler, compiler->token_vec_original, false);
+		return;
+	} 
+	preprocessor_token_push_dst(compiler, tok);
+}
+
 void preprocessor_handle_token(struct compile_process* compiler, struct token* token) {
 	switch(token->type) {
 		case TOKEN_TYPE_SYMBOL:
@@ -684,13 +1317,18 @@ void preprocessor_handle_token(struct compile_process* compiler, struct token* t
 			break;
 		case TOKEN_TYPE_NEWLINE:
 			break;
+		case TOKEN_TYPE_IDENTIFIER:
+			preprocessor_handle_identifier(compiler, token);
+			break;	
+		case TOKEN_TYPE_KEYWORD:
+			preprocessor_handle_keyword(compiler, token);
+			break;
 		default:
 			preprocessor_token_push_dst(compiler, token);
 	}
 }
 
 int preprocessor_run(struct compile_process* compiler) {
-	#warning "add source file as included file"
 	vector_set_peek_pointer(compiler->token_vec_original, 0);
 	struct token* token = preprocessor_next_token(compiler);
 	while(token) {

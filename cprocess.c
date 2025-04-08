@@ -3,6 +3,26 @@
 #include "compiler.h"
 #include "helpers/vector.h"
 
+const char* default_include_dirs[] = {"./compiler_includes", "../compiler_includes", "/usr/include/compiler_includes", "/usr/includes"};
+
+const char* compiler_include_dir_begin(struct compile_process* process) {
+	vector_set_peek_pointer(process->include_dirs, 0);
+	const char* dir = vector_peek_ptr(process->include_dirs);
+	return dir;
+}
+
+const char* compiler_include_dir_next(struct compile_process* process) {
+	const char* dir = vector_peek_ptr(process->include_dirs);
+	return dir;
+}
+
+void compiler_setup_default_include_dirs(struct vector* include_vec) {
+	size_t size = sizeof(default_include_dirs) / sizeof(const char*);
+	for(int i = 0; i < size; i++) {
+		vector_push(include_vec, &default_include_dirs[i]);
+	}
+}
+
 struct compile_process* compile_process_create(const char* filename, const char* filename_out, int flags, struct compile_process* parent_process) {
   FILE* file = fopen(filename, "r");
   if(!file) {
@@ -36,7 +56,7 @@ struct compile_process* compile_process_create(const char* filename, const char*
 	} else {
 		process->preprocessor = preprocessor_create(process);
 		process->include_dirs = vector_create(sizeof(const char*));
-		// setup default include directories
+		compiler_setup_default_include_dirs(process->include_dirs);
 	}
   return process;
 }
