@@ -230,6 +230,7 @@ There were no expenses made in the creation of this compiler. This is a pure sof
 - [dragon-compiler course](https://dragonzap.com/course/creating-a-c-compiler-from-scratch)
 	- License: [GNU General Public License](https://github.com/nibblebits/DragonCompiler/blob/master/LICENSE)
 		- No warranty/No Liability
+
 - [dragon-compiler repo]()
 	- License: [GNU General Public License](https://github.com/nibblebits/DragonCompiler/blob/master/LICENSE)
 		- No warranty/No Liability
@@ -240,9 +241,11 @@ Credit to Daniel McCarthy and DragonZap Education. This is a very well put toget
 	- License: [Custom License](https://github.com/munificent/craftinginterpreters/blob/master/LICENSE)
 		- No warranty/No Liability
 	- [My implementation of JLox in C++](https://github.com/troxeldj/cppLoxv2)
+
 - [Writing a Compiler in Go](https://compilerbook.com/)
 	- License: [MIT License](https://github.com/kitasuke/monkey-go/blob/master/LICENSE)
 		- No warranty/No Liability
+
 - [C-Python](https://github.com/python/cpython/tree/main)
 	- License: [Custom License](https://github.com/python/cpython/blob/main/LICENSE)
 		- Software provided as is (No warranty/No Liability)
