@@ -11,15 +11,18 @@ See [User Docs](https://github.com/troxeldj/senior-compiler/blob/master/user-doc
 ## Mid-way documents
 [personal biography](https://github.com/troxeldj/senior-compiler/blob/master/personal-biography.md)
 
+[initial self assessment](https://github.com/troxeldj/senior-compiler/blob/master/initial-self-assessment.pdf)
+
 [design document](https://github.com/troxeldj/senior-compiler/blob/master/design-document.md)
+
 
 [design report](https://github.com/troxeldj/senior-compiler/blob/master/design-report/README.md)
 
 ## Final Documents
 
-[self assessment](https://github.com/troxeldj/senior-compiler/blob/master/self-assessment.md)
+[final self assessment](https://github.com/troxeldj/senior-compiler/blob/master/self-assessment.md)
 
-
+[final design report](https://github.com/troxeldj/senior-compiler/tree/master/final-design-report)
 
 # Sources
 
