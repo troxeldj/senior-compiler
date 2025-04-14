@@ -7,9 +7,19 @@ This code can then be assembled, linked, and ran.
 
 See [User Docs](https://github.com/troxeldj/senior-compiler/blob/master/user-doc.md) for additional information on usage of the compiler.
 
+# Senior Design Documents
+## Mid-way documents
 [personal biography](https://github.com/troxeldj/senior-compiler/blob/master/personal-biography.md)
+
 [design document](https://github.com/troxeldj/senior-compiler/blob/master/design-document.md)
+
 [design report](https://github.com/troxeldj/senior-compiler/blob/master/design-report/README.md)
+
+## Final Documents
+
+[self assessment](https://github.com/troxeldj/senior-compiler/blob/master/self-assessment.md)
+
+
 
 # Sources
 
